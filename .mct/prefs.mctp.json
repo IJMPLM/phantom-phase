@@ -1,0 +1,754 @@
+{
+  "dataType": 1,
+  "variants": {},
+  "storageBasePath": "",
+  "contentsModified": "2025-05-27T09:08:43.991Z",
+  "dataStorageRelativePath": "/Template-Full/",
+  "editPreference": 0,
+  "name": "Template-Full",
+  "title": "Template-Full",
+  "description": "Add-On Full",
+  "defaultBehaviorPackUniqueId": "b2639221-cf18-4d1c-9b7a-39c9e3a717d6",
+  "defaultResourcePackUniqueId": "2f5f5b17-7c88-4302-847c-4e6266b7fa62",
+  "defaultScriptModuleUniqueId": "b585b2b4-6cec-429f-81f9-6d9045b6dd18",
+  "defaultDataUniqueId": "f5d39eef-67dc-4a3d-b1d5-3ff1ee706ac6",
+  "focus": 0,
+  "items": [
+    {
+      "itemType": 59,
+      "variants": {},
+      "projectPath": "/package.json",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "package.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 58,
+      "variants": {},
+      "projectPath": "/tsconfig.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "tsconfig.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 129,
+      "variants": {},
+      "projectPath": "/.mct/prefs.mctp.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "prefs.mctp.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 109,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/",
+      "storageType": 1,
+      "creationType": 0,
+      "tags": [],
+      "name": "aop_mobs"
+    },
+    {
+      "itemType": 5,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/manifest.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [
+        "behaviorpackmanifest"
+      ],
+      "name": "manifest.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 103,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/pack_icon.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "pack_icon.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 20,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/animation_controllers/sheepomelon.bp_ac.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.bp_ac.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 19,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/animations/sheepomelon.bp_anims.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.bp_anims.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 10,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/entities/biceson.behavior.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "biceson.behavior.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 10,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/entities/frost_moose.behavior.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "frost_moose.behavior.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 10,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/entities/nardolphle.behavior.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "nardolphle.behavior.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 10,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/entities/sheepomelon.behavior.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.behavior.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 24,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/loot_tables/entities/sheepomelon.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 24,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/loot_tables/entities/sheepomelon_shear.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon_shear.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 44,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/spawn_rules/biceson.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "biceson.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 44,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/spawn_rules/frost_moose.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "frost_moose.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 44,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/spawn_rules/nardolphle.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "nardolphle.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 44,
+      "variants": {},
+      "projectPath": "/behavior_packs/aop_mobs/spawn_rules/sheepomelon.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 110,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/",
+      "storageType": 1,
+      "creationType": 0,
+      "tags": [],
+      "name": "aop_mobs"
+    },
+    {
+      "itemType": 14,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/manifest.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [
+        "resourcepackmanifest"
+      ],
+      "name": "manifest.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 103,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/pack_icon.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "pack_icon.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 27,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/sounds.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sounds.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 28,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/animations/biceson.animation.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "biceson.animation.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 28,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/animations/frost_moose.animation.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "frost_moose.animation.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 28,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/animations/nardolphle.animation.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "nardolphle.animation.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 28,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/animations/sheepomelon.animation.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.animation.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 30,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/entity/biceson.entity.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "biceson.entity.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 30,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/entity/frost_moose.entity.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "frost_moose.entity.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 30,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/entity/nardolphle.entity.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "nardolphle.entity.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 30,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/entity/sheepomelon.entity.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.entity.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 32,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/models/entity/biceson.geo.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "biceson.geo.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 32,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/models/entity/frost_moose.geo.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "frost_moose.geo.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 32,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/models/entity/nardolphle.geo.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "nardolphle.geo.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 32,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/models/entity/sheepomelon.geo.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.geo.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 33,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/particles/fireworks_pop.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "fireworks_pop.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 33,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/particles/smoke_puff.json",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "smoke_puff.json",
+      "isInWorld": false
+    },
+    {
+      "itemType": 79,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/texts/en_US.lang",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "en_US.lang",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/biceson.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "biceson.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/nardolphle.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "nardolphle.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/sheepomelon.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "sheepomelon.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/brown.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "brown.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_black.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_black.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_blue.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_blue.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_brown.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_brown.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_cyan.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_cyan.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_gray.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_gray.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_green.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_green.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_light_blue.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_light_blue.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_lime.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_lime.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_magenta.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_magenta.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_none.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_none.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_orange.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_orange.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_pink.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_pink.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_purple.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_purple.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_red.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_red.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_silver.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_silver.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_white.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_white.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/decor_yellow.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "decor_yellow.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/frost1.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "frost1.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/gray.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "gray.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/trader_llama_decor.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "trader_llama_decor.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 99,
+      "variants": {},
+      "projectPath": "/resource_packs/aop_mobs/textures/entity/frost_moose/white.png",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "white.png",
+      "isInWorld": false
+    },
+    {
+      "itemType": 13,
+      "variants": {},
+      "projectPath": "/scripts/Utilities.ts",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "Utilities.ts",
+      "isInWorld": false
+    },
+    {
+      "itemType": 13,
+      "variants": {},
+      "projectPath": "/scripts/main.ts",
+      "storageType": 0,
+      "creationType": 0,
+      "tags": [],
+      "name": "main.ts",
+      "isInWorld": false
+    },
+    {
+      "itemType": 121,
+      "variants": {},
+      "projectPath": "/.env",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": ".env"
+    },
+    {
+      "itemType": 122,
+      "variants": {},
+      "projectPath": "/.prettierrc.json",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": ".prettierrc.json"
+    },
+    {
+      "itemType": 119,
+      "variants": {},
+      "projectPath": "/just.config.ts",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "just.config.ts"
+    },
+    {
+      "itemType": 120,
+      "variants": {},
+      "projectPath": "/eslint.config.mjs",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "eslint.config.mjs"
+    },
+    {
+      "itemType": 75,
+      "variants": {},
+      "projectPath": "/.vscode/launch.json",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "launch.json"
+    },
+    {
+      "itemType": 77,
+      "variants": {},
+      "projectPath": "/.vscode/settings.json",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "settings.json"
+    },
+    {
+      "itemType": 76,
+      "variants": {},
+      "projectPath": "/.vscode/tasks.json",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "tasks.json"
+    },
+    {
+      "itemType": 78,
+      "variants": {},
+      "projectPath": "/.vscode/extensions.json",
+      "storageType": 0,
+      "creationType": 1,
+      "tags": [],
+      "name": "extensions.json"
+    }
+  ],
+  "projectFolderTitle": "Project-Template",
+  "originalGitHubOwner": "microsoft",
+  "originalGitHubRepoName": "minecraft-samples",
+  "originalGitHubFolder": "/addon_starter/complete",
+  "originalGalleryId": "addonFull",
+  "creator": "TGG",
+  "shortName": "tgg_tf",
+  "defaultBehaviorPackVersion": [
+    1,
+    0,
+    0
+  ],
+  "versionMajor": 1,
+  "versionMinor": 0,
+  "versionPatch": 0,
+  "defaultResourcePackVersion": [
+    1,
+    0,
+    0
+  ],
+  "collapsedStoragePaths": [],
+  "gitHubReferences": []
+}
