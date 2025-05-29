@@ -3,11 +3,11 @@
   "variants": {},
   "storageBasePath": "",
   "contentsModified": "2025-05-27T09:08:43.991Z",
-  "dataStorageRelativePath": "/Template-Full/",
+  "dataStorageRelativePath": "/phantom-phase/",
   "editPreference": 0,
-  "name": "Template-Full",
-  "title": "Template-Full",
-  "description": "Add-On Full",
+  "name": "phantom-phase",
+  "title": "phantom-phase",
+  "description": "Add-On Phantom-Phase",
   "defaultBehaviorPackUniqueId": "b2639221-cf18-4d1c-9b7a-39c9e3a717d6",
   "defaultResourcePackUniqueId": "2f5f5b17-7c88-4302-847c-4e6266b7fa62",
   "defaultScriptModuleUniqueId": "b585b2b4-6cec-429f-81f9-6d9045b6dd18",
@@ -59,9 +59,7 @@
       "projectPath": "/behavior_packs/aop_mobs/manifest.json",
       "storageType": 0,
       "creationType": 0,
-      "tags": [
-        "behaviorpackmanifest"
-      ],
+      "tags": ["behaviorpackmanifest"],
       "name": "manifest.json",
       "isInWorld": false
     },
@@ -210,9 +208,7 @@
       "projectPath": "/resource_packs/aop_mobs/manifest.json",
       "storageType": 0,
       "creationType": 0,
-      "tags": [
-        "resourcepackmanifest"
-      ],
+      "tags": ["resourcepackmanifest"],
       "name": "manifest.json",
       "isInWorld": false
     },
@@ -729,26 +725,18 @@
       "name": "extensions.json"
     }
   ],
-  "projectFolderTitle": "Project-Template",
+  "projectFolderTitle": "phantom-phase",
   "originalGitHubOwner": "microsoft",
   "originalGitHubRepoName": "minecraft-samples",
   "originalGitHubFolder": "/addon_starter/complete",
   "originalGalleryId": "addonFull",
   "creator": "TGG",
-  "shortName": "tgg_tf",
-  "defaultBehaviorPackVersion": [
-    1,
-    0,
-    0
-  ],
+  "shortName": "phantom-phase",
+  "defaultBehaviorPackVersion": [1, 0, 0],
   "versionMajor": 1,
   "versionMinor": 0,
   "versionPatch": 0,
-  "defaultResourcePackVersion": [
-    1,
-    0,
-    0
-  ],
+  "defaultResourcePackVersion": [1, 0, 0],
   "collapsedStoragePaths": [],
   "gitHubReferences": []
 }

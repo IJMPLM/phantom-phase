@@ -1,118 +1,188 @@
 // scripts/main.ts
-import { world as world2, system, BlockPermutation as BlockPermutation2 } from "@minecraft/server";
+import { world as world2, system as system2 } from "@minecraft/server";
 
-// scripts/Utilities.ts
-import { world } from "@minecraft/server";
-var Utilities = class {
-  static fillBlock(blockPerm, xFrom, yFrom, zFrom, xTo, yTo, zTo) {
-    const overworld = world.getDimension("overworld");
-    for (let i = xFrom; i <= xTo; i++) {
-      for (let j = yFrom; j <= yTo; j++) {
-        for (let k = zFrom; k <= zTo; k++) {
-          overworld.getBlock({ x: i, y: j, z: k })?.setPermutation(blockPerm);
-        }
-      }
-    }
-  }
-  static fourWalls(perm, xFrom, yFrom, zFrom, xTo, yTo, zTo) {
-    const overworld = world.getDimension("overworld");
-    const xFromP = Math.min(xFrom, xTo);
-    const xToP = Math.max(xFrom, xTo);
-    const yFromP = Math.min(yFrom, yTo);
-    const yToP = Math.max(yFrom, yTo);
-    const zFromP = Math.min(zFrom, zTo);
-    const zToP = Math.max(zFrom, zTo);
-    for (let i = xFromP; i <= xToP; i++) {
-      for (let k = yFromP; k <= yToP; k++) {
-        overworld.getBlock({ x: i, y: k, z: zFromP })?.setPermutation(perm);
-        overworld.getBlock({ x: i, y: k, z: zToP })?.setPermutation(perm);
-      }
-    }
-    for (let j = zFromP + 1; j < zToP; j++) {
-      for (let k = yFromP; k <= yToP; k++) {
-        overworld.getBlock({ x: xFromP, y: k, z: j })?.setPermutation(perm);
-        overworld.getBlock({ x: xToP, y: k, z: j })?.setPermutation(perm);
-      }
-    }
-  }
+// scripts/phase-mode.ts
+import { world, system, GameMode } from "@minecraft/server";
+var playersInPhaseMode = /* @__PURE__ */ new Map();
+var DEFAULT_CONFIG = {
+  speedThresholdBps: 8,
+  exitSpeedThresholdBps: 2,
+  inactiveFramesThreshold: 20,
+  ticksPerSecond: 60,
+  speedCheckInterval: 1,
+  debugUpdateInterval: 10,
+  debugMessages: true,
+  preserveInventory: true
 };
+var config = { ...DEFAULT_CONFIG };
+function calculatePlayerSpeed(player, previousPosition, intervalTicks = config.speedCheckInterval) {
+  const currentPosition = player.location;
+  const dx = currentPosition.x - previousPosition.x;
+  const dy = currentPosition.y - previousPosition.y;
+  const dz = currentPosition.z - previousPosition.z;
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  const secondsFraction = intervalTicks * 60 / config.ticksPerSecond;
+  return secondsFraction > 0 ? distance / secondsFraction : 0;
+}
+function enterPhaseMode(player) {
+  if (player.getGameMode() === GameMode.spectator) {
+    if (config.debugMessages) {
+      world.sendMessage(`\xA7e${player.name} is already in spectator mode, not entering phase mode again.`);
+    }
+    return;
+  }
+  try {
+    const previousMode = player.getGameMode();
+    player.setGameMode(GameMode.spectator);
+    world.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+    playersInPhaseMode.set(player.id, {
+      player,
+      lastPosition: player.location,
+      previousSpeed: 0,
+      inactiveFrames: 0,
+      previousGameMode: previousMode
+    });
+  } catch (e) {
+    world.sendMessage(`\xA7cERROR: Failed to set ${player.name} to spectator mode: ${e}`);
+  }
+}
+function exitPhaseMode(player) {
+  try {
+    const phaseData = playersInPhaseMode.get(player.id);
+    const targetMode = phaseData?.previousGameMode ?? GameMode.survival;
+    player.setGameMode(targetMode);
+    world.sendMessage(`\xA7a${player.name} has returned to reality! (back to ${targetMode} mode)`);
+    playersInPhaseMode.delete(player.id);
+  } catch (e) {
+    world.sendMessage(`\xA7cERROR: Failed to restore ${player.name}'s game mode: ${e}`);
+    playersInPhaseMode.delete(player.id);
+  }
+}
+function logPlayerDebugInfo(player) {
+  if (!config.debugMessages || system.currentTick % config.debugUpdateInterval !== 0) {
+    return;
+  }
+  const currentPos = player.location;
+  const playerData = playersInPhaseMode.get(player.id);
+  const isInPhaseMode = playerData && player.getGameMode() === GameMode.spectator;
+  const lastPos = playerData ? playerData.lastPosition : currentPos;
+  const speed = calculatePlayerSpeed(player, lastPos);
+  const speedColor = speed > config.speedThresholdBps ? "\xA7a" : speed > config.exitSpeedThresholdBps ? "\xA7e" : "\xA7c";
+  world.sendMessage(
+    `\xA77${player.name}: speed=${speedColor}${speed.toFixed(2)} \xA77b/s, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
+  );
+}
+function initializePlayerTracking(player) {
+  return {
+    player,
+    lastPosition: player.location,
+    previousSpeed: 0,
+    inactiveFrames: 0,
+    previousGameMode: player.getGameMode()
+  };
+}
+function updateExistingPhasePlayer(player, phaseData) {
+  const currentSpeed = calculatePlayerSpeed(player, phaseData.lastPosition);
+  phaseData.lastPosition = player.location;
+  phaseData.previousSpeed = currentSpeed;
+  if (currentSpeed < config.exitSpeedThresholdBps) {
+    phaseData.inactiveFrames++;
+    if (phaseData.inactiveFrames >= config.inactiveFramesThreshold) {
+      exitPhaseMode(player);
+    }
+  } else {
+    phaseData.inactiveFrames = 0;
+  }
+}
+function updateRegularPlayer(player) {
+  let playerData = playersInPhaseMode.get(player.id) || initializePlayerTracking(player);
+  const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
+  playerData.lastPosition = player.location;
+  playerData.previousSpeed = currentSpeed;
+  if (currentSpeed > config.speedThresholdBps) {
+    if (config.debugMessages) {
+      world.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+    }
+    enterPhaseMode(player);
+  } else if (!playersInPhaseMode.has(player.id)) {
+    playersInPhaseMode.set(player.id, playerData);
+  }
+}
+function updatePlayerPhaseState(player) {
+  if (!playersInPhaseMode.has(player.id) && (player.getGameMode() === GameMode.creative || player.getGameMode() === GameMode.spectator)) {
+    return;
+  }
+  const phaseData = playersInPhaseMode.get(player.id);
+  if (phaseData && player.getGameMode() === GameMode.spectator) {
+    updateExistingPhasePlayer(player, phaseData);
+  } else {
+    updateRegularPlayer(player);
+  }
+}
+function updatePlayersInPhaseMode() {
+  const players = world.getAllPlayers();
+  for (const player of players) {
+    logPlayerDebugInfo(player);
+    updatePlayerPhaseState(player);
+  }
+  for (const [playerId, data] of playersInPhaseMode.entries()) {
+    try {
+      const _ = data.player.location;
+    } catch (e) {
+      playersInPhaseMode.delete(playerId);
+    }
+  }
+}
+function updatePhaseConfig(newConfig) {
+  config = {
+    ...config,
+    ...newConfig
+  };
+  if (config.debugMessages) {
+    world.sendMessage(`\xA77Phase mode configuration updated:`);
+    world.sendMessage(`\xA77Speed threshold: \xA7f${config.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world.sendMessage(`\xA77Exit threshold: \xA7f${config.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+  }
+}
+function initializePhantomPhase(customConfig) {
+  if (customConfig) {
+    updatePhaseConfig(customConfig);
+  }
+  world.sendMessage("\xA72Phantom Phase system activated!");
+  world.sendMessage(`\xA77Phase speed threshold: \xA7f${config.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
+  world.sendMessage(`\xA77Exit speed threshold: \xA7f${config.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+  for (const player of world.getAllPlayers()) {
+    if (!playersInPhaseMode.has(player.id) && player.getGameMode() !== GameMode.creative && player.getGameMode() !== GameMode.spectator) {
+      playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+    }
+  }
+  system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval);
+}
 
 // scripts/main.ts
 var ticksSinceLoad = 0;
-var ZooMobList = ["aop_mobs:biceson", "aop_mobs:frost_moose", "aop_mobs:sheepomelon"];
 function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 100) {
-    world2.sendMessage("Welcome to the wacky zoo!");
+    world2.sendMessage("\xA76Phantom Phase system starting minBps: 8...");
     initialize();
   }
-  system.run(mainTick);
-}
-function getTriggerLoc() {
-  const spawnLoc = world2.getDefaultSpawnLocation();
-  const x = spawnLoc.x - 5;
-  const z = spawnLoc.z - 5;
-  const y = findTopmostBlockUsingPlayer(x, z);
-  return { x, y, z };
-}
-function getZooLoc() {
-  const spawnLoc = world2.getDefaultSpawnLocation();
-  const x = spawnLoc.x - 25;
-  const z = spawnLoc.z - 25;
-  const y = findTopmostBlockUsingPlayer(x, z);
-  return { x, y, z };
-}
-function findTopmostBlockUsingPlayer(x, z) {
-  const ow = world2.getDimension("overworld");
-  let y = -60;
-  const players = world2.getPlayers();
-  if (players.length > 0) {
-    y = Math.max(players[0].location.y - 8, -62);
-    let block = ow.getBlock({ x, y, z });
-    while (block && !block.permutation.matches("minecraft:air")) {
-      y++;
-      block = ow.getBlock({ x, y, z });
-    }
-  }
-  return y;
+  system2.run(mainTick);
 }
 function initialize() {
-  const overworld = world2.getDimension("overworld");
-  const triggerLoc = getTriggerLoc();
-  const cobblestone = overworld.getBlock(triggerLoc);
-  const button = overworld.getBlock({ x: triggerLoc.x, y: triggerLoc.y + 1, z: triggerLoc.z });
-  if (cobblestone === void 0 || button === void 0) {
-    console.warn("Could not load the position to place our switch.");
-    return -1;
-  }
-  world2.sendMessage("Adding a button at x: " + triggerLoc.x + " y:" + triggerLoc.y + " z: " + triggerLoc.z);
-  cobblestone.setPermutation(BlockPermutation2.resolve("cobblestone"));
-  button.setPermutation(BlockPermutation2.resolve(
-    "acacia_button",
-    { facing_direction: 1 }
-    /* up */
-  ));
-  world2.afterEvents.buttonPush.subscribe(spawnZoo);
+  initializePhantomPhase({
+    speedThresholdBps: 8,
+    // Enter phase mode at this speed (blocks/second)
+    exitSpeedThresholdBps: 2,
+    // Exit phase mode below this speed
+    inactiveFramesThreshold: 20,
+    // Wait this many frames below exit speed before leaving phase mode
+    debugMessages: true,
+    // Show debug messages
+    preserveInventory: true
+    // Don't lose inventory during mode changes
+  });
 }
-function spawnZoo() {
-  const zooLoc = getZooLoc();
-  const overworld = world2.getDimension("overworld");
-  Utilities.fourWalls(
-    BlockPermutation2.resolve("minecraft:glass"),
-    zooLoc.x - 20,
-    zooLoc.y + 20,
-    zooLoc.z - 20,
-    zooLoc.x,
-    zooLoc.y,
-    zooLoc.z
-  );
-  let mobLoc = { x: zooLoc.x - 2, y: zooLoc.y, z: zooLoc.z - 2 };
-  for (const mob of ZooMobList) {
-    world2.sendMessage("Spawning mob: " + mob);
-    overworld.spawnEntity(mob, mobLoc);
-    mobLoc = { x: mobLoc.x - 2, y: mobLoc.y + 1, z: mobLoc.z - 2 };
-  }
-}
-system.run(mainTick);
+system2.run(mainTick);
 
 //# sourceMappingURL=../debug/main.js.map

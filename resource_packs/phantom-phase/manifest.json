@@ -1,0 +1,29 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "phantom-phase",
+    "description": "Phantom Revamps",
+    "uuid": "3923e6ab-fc8f-484e-8604-871681c1f656",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 80]
+  },
+  "modules": [
+    {
+      "description": "Add-on Pack Resources",
+      "type": "resources",
+      "uuid": "d172b65d-fc77-4294-9951-60ee1313eb1f",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "df37f9a1-3386-4bb9-b0bc-fef1110e8216",
+      "version": [1, 0, 0]
+    }
+  ],
+  "metadata": {
+    "generated_with": {
+      "mctoolsweb": ["0.11.0"]
+    }
+  }
+}

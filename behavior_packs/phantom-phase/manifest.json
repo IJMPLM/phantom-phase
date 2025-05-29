@@ -1,0 +1,46 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "phantom-phase",
+    "description": "Phantom Revamps",
+    "uuid": "df37f9a1-3386-4bb9-b0bc-fef1110e8216",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 80]
+  },
+  "metadata": {
+    "generated_with": {
+      "blockbench_entity_wizard": ["1.0.9"],
+      "mctoolsweb": ["0.11.0"]
+    }
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [1, 0, 0],
+      "uuid": "67fd5db1-3245-4957-ba5f-a16171cfceb7",
+      "type": "data"
+    },
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "a56346c6-ecad-4c5b-bb3c-ef814506fdc7",
+      "version": [0, 0, 1],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "3923e6ab-fc8f-484e-8604-871681c1f656",
+      "version": [1, 0, 0]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": [1, 19, 0]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [1, 3, 0]
+    }
+  ]
+}

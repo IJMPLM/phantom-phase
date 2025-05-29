@@ -24,10 +24,7 @@
           "splash": "mob.dolphin.splash",
           "swim": "mob.dolphin.swim"
         },
-        "pitch": [
-          0.8,
-          1.2
-        ],
+        "pitch": [0.8, 1.2],
         "volume": 1
       },
       "aop_mobs:biceson": {
@@ -50,19 +47,13 @@
             "volume": 0.7
           }
         },
-        "pitch": [
-          0.8,
-          1.2
-        ],
+        "pitch": [0.8, 1.2],
         "volume": 1
       },
       "aop_mobs:frost_moose": {
         "events": {
           "add.chest": {
-            "pitch": [
-              0.8,
-              1.2
-            ],
+            "pitch": [0.8, 1.2],
             "sound": "mob.horse.armor",
             "volume": 1
           },
@@ -74,15 +65,9 @@
           },
           "death": "mob.llama.death",
           "eat": {
-            "pitch": [
-              0.8,
-              1.2
-            ],
+            "pitch": [0.8, 1.2],
             "sound": "mob.llama.eat",
-            "volume": [
-              0.5,
-              1.5
-            ]
+            "volume": [0.5, 1.5]
           },
           "hurt": "mob.llama.hurt",
           "mad": "mob.llama.angry",
@@ -93,10 +78,7 @@
             "volume": 0.15
           }
         },
-        "pitch": [
-          0.8,
-          1.2
-        ],
+        "pitch": [0.8, 1.2],
         "volume": 0.8
       },
       "aop_mobs:sheepomelon": {
@@ -110,10 +92,7 @@
             "volume": 0.4
           }
         },
-        "pitch": [
-          0.8,
-          1.2
-        ],
+        "pitch": [0.8, 1.2],
         "volume": 1
       }
     }
