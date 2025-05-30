@@ -1,15 +1,17 @@
 import { world, system, Entity, GameMode, Player, Vector3 } from "@minecraft/server";
 
-// Configuration interface for
+// Configuration interface for phantom phase system
 interface PhaseConfig {
-  speedThresholdBps: number;
-  exitSpeedThresholdBps: number;
-  inactiveFramesThreshold: number;
-  ticksPerSecond: number;
-  speedCheckInterval: number;
-  debugUpdateInterval: number;
-  debugMessages: boolean;
-  preserveInventory: boolean;
+  speedThresholdBps: number; // Speed threshold to enter phase mode (blocks per second)
+  exitSpeedThresholdBps: number; // Speed threshold to exit phase mode (blocks per second)
+  inactiveFramesThreshold: number; // Number of frames below exit speed before exiting phase mode
+  ticksPerSecond: number; // Game ticks per second (for calculations)
+  speedCheckInterval: number; // How often to check player speeds (in ticks)
+  debugUpdateInterval: number; // How often to show debug messages (in ticks)
+  debugMessages: boolean; // Whether to show debug messages
+  preserveInventory: boolean; // Whether to preserve inventory during mode changes
+  gameModeSwitchDelay: number; // Delay in ticks for game mode switches (improves reliability)
+  strictValidation: boolean; // Whether to use strict player validation
 }
 
 // Player phase mode data type
@@ -26,18 +28,23 @@ const playersInPhaseMode = new Map<string, PhasePlayerData>();
 
 // Default configuration constants
 const DEFAULT_CONFIG: PhaseConfig = {
-  speedThresholdBps: 8.0,
-  exitSpeedThresholdBps: 2.0,
+  speedThresholdBps: 25.0,
+  exitSpeedThresholdBps: 7.0,
   inactiveFramesThreshold: 20,
   ticksPerSecond: 60,
   speedCheckInterval: 1,
   debugUpdateInterval: 10,
+  gameModeSwitchDelay: 1,
+  strictValidation: true,
   debugMessages: true,
   preserveInventory: true,
 };
 
 // Active configuration
 let config: PhaseConfig = { ...DEFAULT_CONFIG };
+
+// Store the update interval ID so we can clear it if needed
+let updateIntervalId: number | undefined;
 
 /**
  * Gets player speed directly from the flying_speed component
@@ -56,6 +63,7 @@ function calculatePlayerSpeed(
  * Switches player to spectator mode and adds them to phase mode tracking
  */
 function enterPhaseMode(player: Player): void {
+  // Prevent redundant mode changes
   if (player.getGameMode() === GameMode.spectator) {
     if (config.debugMessages) {
       world.sendMessage(`§e${player.name} is already in spectator mode, not entering phase mode again.`);
@@ -64,10 +72,10 @@ function enterPhaseMode(player: Player): void {
   }
 
   try {
+    // Store the previous game mode before changing it
     const previousMode = player.getGameMode();
-    player.setGameMode(GameMode.spectator);
-    world.sendMessage(`§b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
 
+    // Add player to phase mode tracking before mode change to prevent race conditions
     playersInPhaseMode.set(player.id, {
       player,
       lastPosition: player.location,
@@ -75,6 +83,27 @@ function enterPhaseMode(player: Player): void {
       inactiveFrames: 0,
       previousGameMode: previousMode,
     });
+    // Queue the game mode change to happen after a delay for better reliability
+    system.runTimeout(() => {
+      try {
+        // Verify player is still valid and eligible for mode change
+        if (player && player.id && !player.isValid?.()) {
+          world.sendMessage(`§cPlayer ${player.name} is no longer valid, aborting phase mode entry`);
+          playersInPhaseMode.delete(player.id);
+          return;
+        }
+
+        // Double check that player hasn't already changed modes
+        if (player.getGameMode() !== GameMode.spectator) {
+          // Explicitly force spectator mode
+          player.setGameMode(GameMode.spectator);
+          world.sendMessage(`§b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+        }
+      } catch (err) {
+        world.sendMessage(`§cERROR: Failed to set spectator mode: ${err}`);
+        // Clean up tracking data on failure        playersInPhaseMode.delete(player.id);
+      }
+    }, config.gameModeSwitchDelay); // Configurable delay for stability
   } catch (e) {
     world.sendMessage(`§cERROR: Failed to set ${player.name} to spectator mode: ${e}`);
   }
@@ -85,13 +114,50 @@ function enterPhaseMode(player: Player): void {
  */
 function exitPhaseMode(player: Player): void {
   try {
+    // Get phase data and validate it exists
     const phaseData = playersInPhaseMode.get(player.id);
-    // Use the previous game mode if available, otherwise default to survival
-    const targetMode = phaseData?.previousGameMode ?? GameMode.survival;
+    if (!phaseData) {
+      world.sendMessage(`§cWARNING: No phase data found for ${player.name} when trying to exit phase mode`);
+      return;
+    }
 
-    player.setGameMode(targetMode);
-    world.sendMessage(`§a${player.name} has returned to reality! (back to ${targetMode} mode)`);
-    playersInPhaseMode.delete(player.id);
+    // Use the previous game mode if available, otherwise default to survival
+    const targetMode = phaseData.previousGameMode ?? GameMode.survival;
+
+    // Store a local copy of needed data before removing tracking
+    const playerName = player.name;
+    const playerId = player.id;
+
+    // Remove from tracking first to prevent re-entry race conditions
+    playersInPhaseMode.delete(playerId);
+
+    // Schedule the game mode change with a slight delay for better reliability
+    system.runTimeout(() => {
+      try {
+        // Verify player is still valid before proceeding
+        if (!player || !player.id || !player.isValid?.()) {
+          world.sendMessage(`§cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
+          return;
+        }
+
+        // Check current game mode and switch if appropriate
+        const currentMode = player.getGameMode();
+        if (currentMode === GameMode.spectator) {
+          // Explicitly force target mode
+          player.setGameMode(targetMode);
+          world.sendMessage(`§a${playerName} has returned to reality! (back to ${targetMode} mode)`);
+        } else if (currentMode !== targetMode) {
+          // They're in an unexpected mode, but not spectator
+          world.sendMessage(`§e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
+          player.setGameMode(targetMode);
+        } else {
+          // They're already in the target mode somehow
+          world.sendMessage(`§e${playerName} is already in ${targetMode} mode`);
+        }
+      } catch (err) {
+        world.sendMessage(`§cERROR: Failed to restore game mode for ${playerName}: ${err}`);
+      }
+    }, config.gameModeSwitchDelay); // Configurable delay for stability
   } catch (e) {
     world.sendMessage(`§cERROR: Failed to restore ${player.name}'s game mode: ${e}`);
     // Still try to clean up the tracking data
@@ -202,40 +268,120 @@ function updateRegularPlayer(player: Player): void {
  * Updates a single player's phase state
  */
 function updatePlayerPhaseState(player: Player): void {
-  if (
-    !playersInPhaseMode.has(player.id) &&
-    (player.getGameMode() === GameMode.creative || player.getGameMode() === GameMode.spectator)
-  ) {
-    return; // Skip creative and spectator players not already being tracked
-  }
+  try {
+    // Avoid processing creative/spectator players that aren't already tracked
+    const currentGameMode = player.getGameMode();
+    const isTracked = playersInPhaseMode.has(player.id);
 
+    // Don't start tracking spectator players who aren't already tracked
+    if (!isTracked && currentGameMode === GameMode.spectator && !isPhaseModeCaused(player)) {
+      return;
+    }
+
+    // Get phase data if it exists
+    const phaseData = playersInPhaseMode.get(player.id);
+
+    // If player is in spectator mode and we're tracking them, they're in phase mode
+    if (phaseData && currentGameMode === GameMode.spectator) {
+      updateExistingPhasePlayer(player, phaseData);
+    } else {
+      // Otherwise update as a regular player
+      updateRegularPlayer(player);
+    }
+  } catch (e) {
+    // Handle any errors that might occur during player state update
+    if (config.debugMessages) {
+      world.sendMessage(`§cError updating player phase state: ${e}`);
+    }
+  }
+}
+
+/**
+ * Checks if the player is in spectator mode because of our phase system
+ * rather than manually switching to spectator
+ */
+function isPhaseModeCaused(player: Player): boolean {
   const phaseData = playersInPhaseMode.get(player.id);
-
-  if (phaseData && player.getGameMode() === GameMode.spectator) {
-    updateExistingPhasePlayer(player, phaseData);
-  } else {
-    updateRegularPlayer(player);
-  }
+  return !!phaseData && player.getGameMode() === GameMode.spectator;
 }
 
 /**
  * Updates all players' phase status based on speed and conditions
  */
 function updatePlayersInPhaseMode(): void {
+  // Clean up players who have left the game first to avoid errors
+  cleanupDisconnectedPlayers();
+
   const players = world.getAllPlayers();
 
   for (const player of players) {
-    logPlayerDebugInfo(player);
-    updatePlayerPhaseState(player);
+    // Verify player is valid before processing
+    try {
+      if (player && player.id) {
+        logPlayerDebugInfo(player);
+        updatePlayerPhaseState(player);
+      }
+    } catch (err) {
+      if (config.debugMessages) {
+        world.sendMessage(`§cError updating player: ${err}`);
+      }
+    }
   }
+}
 
-  // Clean up players who have left the game
+/**
+ * Clean up any disconnected players from tracking
+ */
+function cleanupDisconnectedPlayers(): void {
+  // Get the current set of online players for quick lookup
+  const onlinePlayers = new Set(world.getAllPlayers().map((p) => p.id));
+
   for (const [playerId, data] of playersInPhaseMode.entries()) {
     try {
-      // This will throw if the player has left the game
-      const _ = data.player.location;
+      let shouldRemove = false;
+      let reason = "unknown";
+
+      // Check if player reference is valid
+      if (!data.player || !data.player.id) {
+        shouldRemove = true;
+        reason = "invalid reference";
+      }
+      // Check if player is still connected using the Set for faster lookup
+      else if (!onlinePlayers.has(playerId)) {
+        shouldRemove = true;
+        reason = "not connected";
+      }
+      // Check if player reference is stale or invalid
+      else {
+        try {
+          // Try to access player properties - will throw if reference is invalid
+          const _ = data.player.location;
+
+          // Check isValid method if available
+          if (data.player.isValid?.() === false) {
+            shouldRemove = true;
+            reason = "reference invalid";
+          }
+        } catch (accessError) {
+          shouldRemove = true;
+          reason = "reference error";
+        }
+      }
+
+      // Remove player if any check failed
+      if (shouldRemove) {
+        if (config.debugMessages) {
+          const playerName = data.player?.name || "Unknown";
+          world.sendMessage(`§7Removing player from phase tracking (${reason}): ${playerName}`);
+        }
+        playersInPhaseMode.delete(playerId);
+      }
     } catch (e) {
+      // Catch any unexpected errors and remove player from tracking to be safe
       playersInPhaseMode.delete(playerId);
+      if (config.debugMessages) {
+        world.sendMessage(`§cError during player cleanup: ${e}`);
+      }
     }
   }
 }
@@ -260,26 +406,65 @@ export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
  * Initializes the phantom phase system that switches fast-moving players to spectator mode
  */
 export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
-  // Apply any custom configuration
-  if (customConfig) {
-    updatePhaseConfig(customConfig);
-  }
-
-  world.sendMessage("§2Phantom Phase system activated!");
-  world.sendMessage(`§7Phase speed threshold: §f${config.speedThresholdBps.toFixed(1)} §7blocks/second`);
-  world.sendMessage(`§7Exit speed threshold: §f${config.exitSpeedThresholdBps.toFixed(1)} §7blocks/second`);
-
-  // Initialize tracking for all current players
-  for (const player of world.getAllPlayers()) {
-    if (
-      !playersInPhaseMode.has(player.id) &&
-      player.getGameMode() !== GameMode.creative &&
-      player.getGameMode() !== GameMode.spectator
-    ) {
-      playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+  try {
+    // Apply any custom configuration
+    if (customConfig) {
+      updatePhaseConfig(customConfig);
     }
-  }
 
-  // Set up regular update interval for phase mode system
-  system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval);
+    world.sendMessage("§2Phantom Phase system activated!");
+    world.sendMessage(`§7Phase speed threshold: §f${config.speedThresholdBps.toFixed(1)} §7blocks/second`);
+    world.sendMessage(`§7Exit speed threshold: §f${config.exitSpeedThresholdBps.toFixed(1)} §7blocks/second`);
+    world.sendMessage(`§7Mode change delay: §f${config.inactiveFramesThreshold} §7frames`);
+
+    // Clear any existing players in phase mode
+    playersInPhaseMode.clear();
+
+    // Initialize tracking for all current players
+    for (const player of world.getAllPlayers()) {
+      try {
+        if (
+          player &&
+          player.id &&
+          player.isValid?.() !== false &&
+          !playersInPhaseMode.has(player.id) &&
+          player.getGameMode() !== GameMode.creative &&
+          player.getGameMode() !== GameMode.spectator
+        ) {
+          playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+        }
+      } catch (playerError) {
+        world.sendMessage(`§cError initializing player ${player?.name || "unknown"}: ${playerError}`);
+      }
+    }
+
+    // Clear any existing intervals to prevent duplicates
+    try {
+      if (updateIntervalId !== undefined) {
+        system.clearRun(updateIntervalId);
+        updateIntervalId = undefined;
+      }
+    } catch (e) {
+      // No previous interval exists or error clearing it
+      world.sendMessage(`§cWarning: Could not clear previous update interval: ${e}`);
+    }
+
+    // Set up regular update interval for phase mode system
+    updateIntervalId = system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval);
+
+    // Verify the interval was created successfully
+    if (updateIntervalId === undefined) {
+      world.sendMessage(`§cWARNING: Failed to create update interval`);
+    } else {
+      world.sendMessage(`§aPhantom Phase system is now monitoring player speeds (interval ID: ${updateIntervalId})`);
+    }
+
+    // Run an immediate check of all players to ensure system is working
+    system.runTimeout(updatePlayersInPhaseMode, 1);
+
+    return true;
+  } catch (e) {
+    world.sendMessage(`§cFailed to initialize Phantom Phase system: ${e}`);
+    return false;
+  }
 }
