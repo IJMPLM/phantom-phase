@@ -40,22 +40,16 @@ const DEFAULT_CONFIG: PhaseConfig = {
 let config: PhaseConfig = { ...DEFAULT_CONFIG };
 
 /**
- * Calculates player speed in blocks per second based on two positions and time interval
+ * Gets player speed directly from the flying_speed component
+ * Throws an error if the component is not available
  */
 function calculatePlayerSpeed(
   player: Player,
   previousPosition: Vector3,
   intervalTicks: number = config.speedCheckInterval
 ): number {
-  const currentPosition = player.location;
-  const dx = currentPosition.x - previousPosition.x;
-  const dy = currentPosition.y - previousPosition.y;
-  const dz = currentPosition.z - previousPosition.z;
-
-  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  const secondsFraction = intervalTicks / config.ticksPerSecond;
-
-  return secondsFraction > 0 ? distance / secondsFraction : 0;
+  const velocity = player.getVelocity();
+  return 17 * Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2);
 }
 
 /**
@@ -117,15 +111,24 @@ function logPlayerDebugInfo(player: Player): void {
   const playerData = playersInPhaseMode.get(player.id);
   const isInPhaseMode = playerData && player.getGameMode() === GameMode.spectator;
   const lastPos = playerData ? playerData.lastPosition : currentPos;
-  const speed = calculatePlayerSpeed(player, lastPos);
 
-  const speedColor = speed > config.speedThresholdBps ? "§a" : speed > config.exitSpeedThresholdBps ? "§e" : "§c";
+  try {
+    const speed = calculatePlayerSpeed(player, lastPos);
+    const speedColor = speed > config.speedThresholdBps ? "§a" : speed > config.exitSpeedThresholdBps ? "§e" : "§c";
 
-  world.sendMessage(
-    `§7${player.name}: speed=${speedColor}${speed.toFixed(2)} §7b/s, isGliding=${
-      player.isGliding ? "§aYes" : "§cNo"
-    }, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "§aYES" : "§cNO"}`
-  );
+    world.sendMessage(
+      `§7${player.name}: speed=${speedColor}${speed.toFixed(2)} §7b/s, isGliding=${
+        player.isGliding ? "§aYes" : "§cNo"
+      }, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "§aYES" : "§cNO"}`
+    );
+  } catch (e: any) {
+    // If we can't get speed, just show that the component is not available
+    world.sendMessage(
+      `§7${player.name}: §cSpeed component not available, isGliding=${
+        player.isGliding ? "§aYes" : "§cNo"
+      }, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "§aYES" : "§cNO"}`
+    );
+  }
 }
 
 /**
@@ -145,19 +148,26 @@ function initializePlayerTracking(player: Player): PhasePlayerData {
  * Updates phase status for players already in phase mode
  */
 function updateExistingPhasePlayer(player: Player, phaseData: PhasePlayerData): void {
-  const currentSpeed = calculatePlayerSpeed(player, phaseData.lastPosition);
+  try {
+    const currentSpeed = calculatePlayerSpeed(player, phaseData.lastPosition);
 
-  phaseData.lastPosition = player.location;
-  phaseData.previousSpeed = currentSpeed;
+    phaseData.lastPosition = player.location;
+    phaseData.previousSpeed = currentSpeed;
 
-  if (currentSpeed < config.exitSpeedThresholdBps) {
-    phaseData.inactiveFrames++;
+    if (currentSpeed < config.exitSpeedThresholdBps) {
+      phaseData.inactiveFrames++;
 
-    if (phaseData.inactiveFrames >= config.inactiveFramesThreshold) {
-      exitPhaseMode(player);
+      if (phaseData.inactiveFrames >= config.inactiveFramesThreshold) {
+        exitPhaseMode(player);
+      }
+    } else {
+      phaseData.inactiveFrames = 0;
     }
-  } else {
-    phaseData.inactiveFrames = 0;
+  } catch (e: any) {
+    if (config.debugMessages) {
+      world.sendMessage(`§c${player.name}: ${e.message}`);
+    }
+    // If we can't get speed, just keep current state
   }
 }
 
@@ -165,19 +175,26 @@ function updateExistingPhasePlayer(player: Player, phaseData: PhasePlayerData): 
  * Updates and checks players not in phase mode
  */
 function updateRegularPlayer(player: Player): void {
-  let playerData = playersInPhaseMode.get(player.id) || initializePlayerTracking(player);
+  try {
+    let playerData = playersInPhaseMode.get(player.id) || initializePlayerTracking(player);
 
-  const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
-  playerData.lastPosition = player.location;
-  playerData.previousSpeed = currentSpeed;
+    const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
+    playerData.lastPosition = player.location;
+    playerData.previousSpeed = currentSpeed;
 
-  if (currentSpeed > config.speedThresholdBps) {
-    if (config.debugMessages) {
-      world.sendMessage(`§e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+    if (currentSpeed > config.speedThresholdBps) {
+      if (config.debugMessages) {
+        world.sendMessage(`§e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+      }
+      enterPhaseMode(player);
+    } else if (!playersInPhaseMode.has(player.id)) {
+      playersInPhaseMode.set(player.id, playerData);
     }
-    enterPhaseMode(player);
-  } else if (!playersInPhaseMode.has(player.id)) {
-    playersInPhaseMode.set(player.id, playerData);
+  } catch (e: any) {
+    if (config.debugMessages) {
+      world.sendMessage(`§c${player.name}: ${e.message}`);
+    }
+    // If we can't get speed, don't update player state
   }
 }
 

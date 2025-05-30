@@ -16,13 +16,8 @@ var DEFAULT_CONFIG = {
 };
 var config = { ...DEFAULT_CONFIG };
 function calculatePlayerSpeed(player, previousPosition, intervalTicks = config.speedCheckInterval) {
-  const currentPosition = player.location;
-  const dx = currentPosition.x - previousPosition.x;
-  const dy = currentPosition.y - previousPosition.y;
-  const dz = currentPosition.z - previousPosition.z;
-  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  const secondsFraction = intervalTicks * 60 / config.ticksPerSecond;
-  return secondsFraction > 0 ? distance / secondsFraction : 0;
+  const velocity = player.getVelocity();
+  return 17 * Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2);
 }
 function enterPhaseMode(player) {
   if (player.getGameMode() === GameMode.spectator) {
@@ -66,11 +61,17 @@ function logPlayerDebugInfo(player) {
   const playerData = playersInPhaseMode.get(player.id);
   const isInPhaseMode = playerData && player.getGameMode() === GameMode.spectator;
   const lastPos = playerData ? playerData.lastPosition : currentPos;
-  const speed = calculatePlayerSpeed(player, lastPos);
-  const speedColor = speed > config.speedThresholdBps ? "\xA7a" : speed > config.exitSpeedThresholdBps ? "\xA7e" : "\xA7c";
-  world.sendMessage(
-    `\xA77${player.name}: speed=${speedColor}${speed.toFixed(2)} \xA77b/s, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
-  );
+  try {
+    const speed = calculatePlayerSpeed(player, lastPos);
+    const speedColor = speed > config.speedThresholdBps ? "\xA7a" : speed > config.exitSpeedThresholdBps ? "\xA7e" : "\xA7c";
+    world.sendMessage(
+      `\xA77${player.name}: speed=${speedColor}${speed.toFixed(2)} \xA77b/s, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
+    );
+  } catch (e) {
+    world.sendMessage(
+      `\xA77${player.name}: \xA7cSpeed component not available, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
+    );
+  }
 }
 function initializePlayerTracking(player) {
   return {
@@ -82,30 +83,42 @@ function initializePlayerTracking(player) {
   };
 }
 function updateExistingPhasePlayer(player, phaseData) {
-  const currentSpeed = calculatePlayerSpeed(player, phaseData.lastPosition);
-  phaseData.lastPosition = player.location;
-  phaseData.previousSpeed = currentSpeed;
-  if (currentSpeed < config.exitSpeedThresholdBps) {
-    phaseData.inactiveFrames++;
-    if (phaseData.inactiveFrames >= config.inactiveFramesThreshold) {
-      exitPhaseMode(player);
+  try {
+    const currentSpeed = calculatePlayerSpeed(player, phaseData.lastPosition);
+    phaseData.lastPosition = player.location;
+    phaseData.previousSpeed = currentSpeed;
+    if (currentSpeed < config.exitSpeedThresholdBps) {
+      phaseData.inactiveFrames++;
+      if (phaseData.inactiveFrames >= config.inactiveFramesThreshold) {
+        exitPhaseMode(player);
+      }
+    } else {
+      phaseData.inactiveFrames = 0;
     }
-  } else {
-    phaseData.inactiveFrames = 0;
+  } catch (e) {
+    if (config.debugMessages) {
+      world.sendMessage(`\xA7c${player.name}: ${e.message}`);
+    }
   }
 }
 function updateRegularPlayer(player) {
-  let playerData = playersInPhaseMode.get(player.id) || initializePlayerTracking(player);
-  const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
-  playerData.lastPosition = player.location;
-  playerData.previousSpeed = currentSpeed;
-  if (currentSpeed > config.speedThresholdBps) {
-    if (config.debugMessages) {
-      world.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+  try {
+    let playerData = playersInPhaseMode.get(player.id) || initializePlayerTracking(player);
+    const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
+    playerData.lastPosition = player.location;
+    playerData.previousSpeed = currentSpeed;
+    if (currentSpeed > config.speedThresholdBps) {
+      if (config.debugMessages) {
+        world.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+      }
+      enterPhaseMode(player);
+    } else if (!playersInPhaseMode.has(player.id)) {
+      playersInPhaseMode.set(player.id, playerData);
     }
-    enterPhaseMode(player);
-  } else if (!playersInPhaseMode.has(player.id)) {
-    playersInPhaseMode.set(player.id, playerData);
+  } catch (e) {
+    if (config.debugMessages) {
+      world.sendMessage(`\xA7c${player.name}: ${e.message}`);
+    }
   }
 }
 function updatePlayerPhaseState(player) {
@@ -163,7 +176,7 @@ function initializePhantomPhase(customConfig) {
 var ticksSinceLoad = 0;
 function mainTick() {
   ticksSinceLoad++;
-  if (ticksSinceLoad === 100) {
+  if (ticksSinceLoad === 60) {
     world2.sendMessage("\xA76Phantom Phase system starting minBps: 8...");
     initialize();
   }

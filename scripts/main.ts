@@ -6,7 +6,7 @@ let ticksSinceLoad = 0;
 function mainTick() {
   ticksSinceLoad++;
 
-  if (ticksSinceLoad === 100) {
+  if (ticksSinceLoad === 60) {
     world.sendMessage("§6Phantom Phase system starting minBps: 8...");
     initialize();
   }
