@@ -24,6 +24,7 @@ function initialize() {
     preserveInventory: true, // Don't lose inventory during mode changes
     phaseBlockCheckDistance: 10, // Check for blocks this many blocks ahead
     alwaysUseSpectator: false, // Only use spectator when blocks are ahead
+    spectatorBlockCheckInterval: 5, // Check for blocks every 5 ticks while in spectator mode
   });
 
   // Example of updating configuration later if needed

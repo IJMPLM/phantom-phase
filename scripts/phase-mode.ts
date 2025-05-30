@@ -1,5 +1,12 @@
-import { world, system, Entity, GameMode, Player, Vector3 } from "@minecraft/server";
+// filepath: d:\Repositories\Minecraft\phantom-phase\scripts\phase-mode.ts
+import { world, system, GameMode, Player, Vector3 } from "@minecraft/server";
 import { enableSpeedometer, disableSpeedometer } from "./phase-mode-speedometer";
+import {
+  makePlayerInvulnerable,
+  removePlayerInvulnerability,
+  isPlayerInvulnerable,
+  setInvulnerabilityDebug,
+} from "./phase-mode-invulnerability";
 
 // Configuration interface for phantom phase system
 interface PhaseConfig {
@@ -15,6 +22,7 @@ interface PhaseConfig {
   strictValidation: boolean; // Whether to use strict player validation
   phaseBlockCheckDistance: number; // Distance to check for blocks ahead before entering spectator mode
   alwaysUseSpectator: boolean; // Whether to always use spectator mode regardless of blocks ahead
+  spectatorBlockCheckInterval: number; // How often (in ticks) to check for blocks ahead while in spectator mode
 }
 
 // Player phase mode data type
@@ -24,6 +32,7 @@ interface PhasePlayerData {
   previousSpeed: number;
   inactiveFrames: number;
   previousGameMode?: GameMode;
+  velocity?: Vector3; // Store velocity for smooth transitions out of spectator mode
 }
 
 // Map to track players in phase mode
@@ -43,6 +52,7 @@ const DEFAULT_CONFIG: PhaseConfig = {
   preserveInventory: true,
   phaseBlockCheckDistance: 10, // Check 10 blocks ahead by default
   alwaysUseSpectator: false, // Only use spectator when blocks are ahead
+  spectatorBlockCheckInterval: 5, // Check for blocks every 5 ticks while in spectator mode
 };
 
 // Active configuration
@@ -50,6 +60,7 @@ let config: PhaseConfig = { ...DEFAULT_CONFIG };
 
 // Store the update interval ID so we can clear it if needed
 let updateIntervalId: number | undefined;
+let spectatorCheckIntervalId: number | undefined;
 
 /**
  * Gets player speed directly from the flying_speed component
@@ -82,6 +93,9 @@ function enterPhaseMode(player: Player): void {
     // Store the previous game mode before changing it
     const previousMode = player.getGameMode();
 
+    // Get current velocity for preserving movement when exiting spectator later
+    const currentVelocity = player.getVelocity();
+
     // Add player to phase mode tracking before mode change to prevent race conditions
     playersInPhaseMode.set(player.id, {
       player,
@@ -89,6 +103,7 @@ function enterPhaseMode(player: Player): void {
       previousSpeed: 0,
       inactiveFrames: 0,
       previousGameMode: previousMode,
+      velocity: currentVelocity, // Store current velocity for smooth transitions out
     });
 
     // Check if there's a block ahead or if we should always use spectator
@@ -113,14 +128,8 @@ function enterPhaseMode(player: Player): void {
           }
         } else {
           // Make player invulnerable but keep their current game mode
-          // Apply abilities for invulnerability
-          try {
-            player.runCommand("ability @s mayfly true");
-            player.runCommand("ability @s invulnerable true");
-            world.sendMessage(`§d${player.name} is phasing (staying in ${previousMode} mode with invulnerability)`);
-          } catch (abilityError) {
-            world.sendMessage(`§cERROR: Failed to apply abilities: ${abilityError}`);
-          }
+          makePlayerInvulnerable(player);
+          world.sendMessage(`§d${player.name} is phasing (staying in ${previousMode} mode with invulnerability)`);
         }
       } catch (err) {
         world.sendMessage(`§cERROR: Failed to set phase mode: ${err}`);
@@ -137,7 +146,7 @@ function enterPhaseMode(player: Player): void {
  * Switches player back to their previous mode and removes them from phase tracking
  * Removes invulnerability if it was applied
  */
-function exitPhaseMode(player: Player): void {
+function exitPhaseMode(player: Player, preserveVelocity = true): void {
   try {
     // Get phase data and validate it exists
     const phaseData = playersInPhaseMode.get(player.id);
@@ -152,6 +161,9 @@ function exitPhaseMode(player: Player): void {
     // Store a local copy of needed data before removing tracking
     const playerName = player.name;
     const playerId = player.id;
+
+    // Store velocity data for smooth transition
+    const storedVelocity = phaseData.velocity;
 
     // Remove from tracking first to prevent re-entry race conditions
     playersInPhaseMode.delete(playerId);
@@ -168,17 +180,55 @@ function exitPhaseMode(player: Player): void {
         // Check current game mode and switch if appropriate
         const currentMode = player.getGameMode();
 
-        // Remove any abilities granted (invulnerability, etc.)
-        try {
-          player.runCommand("ability @s mayfly false");
-          player.runCommand("ability @s invulnerable false");
-        } catch (e) {
-          // Ignore ability errors, they're not critical
+        // Remove any invulnerability
+        if (isPlayerInvulnerable(player.id)) {
+          removePlayerInvulnerability(player);
         }
 
         if (currentMode === GameMode.spectator) {
           // Explicitly force target mode
           player.setGameMode(targetMode);
+
+          // Apply previous velocity for smooth transition if we have stored velocity data
+          if (preserveVelocity && storedVelocity) {
+            // Wait a tick for game mode change to take effect
+            system.runTimeout(() => {
+              try {
+                // Telerport player slightly forward in their view direction to avoid getting stuck
+                const viewDirection = player.getViewDirection();
+                const currentLocation = player.location;
+
+                player.teleport(
+                  {
+                    x: currentLocation.x + viewDirection.x * 0.2,
+                    y: currentLocation.y + viewDirection.y * 0.2,
+                    z: currentLocation.z + viewDirection.z * 0.2,
+                  },
+                  { dimension: player.dimension }
+                );
+
+                // Apply velocity
+                if (targetMode === GameMode.adventure || targetMode === GameMode.survival) {
+                  // Apply velocity in the direction they're looking at the stored speed
+                  const speed = Math.sqrt(storedVelocity.x ** 2 + storedVelocity.y ** 2 + storedVelocity.z ** 2);
+
+                  // Normalize view direction and scale by speed
+                  const normalizedView = {
+                    x: viewDirection.x / Math.sqrt(viewDirection.x ** 2 + viewDirection.y ** 2 + viewDirection.z ** 2),
+                    y: viewDirection.y / Math.sqrt(viewDirection.x ** 2 + viewDirection.y ** 2 + viewDirection.z ** 2),
+                    z: viewDirection.z / Math.sqrt(viewDirection.x ** 2 + viewDirection.y ** 2 + viewDirection.z ** 2),
+                  };
+
+                  // Apply impulse in view direction
+                  player.applyKnockback(normalizedView.x, normalizedView.z, speed * 0.5, 0.1);
+                }
+              } catch (velocityErr) {
+                if (config.debugMessages) {
+                  world.sendMessage(`§cError applying velocity for ${playerName}: ${velocityErr}`);
+                }
+              }
+            }, 1);
+          }
 
           // Update speedometer to show new state but don't disable it
           enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
@@ -192,7 +242,7 @@ function exitPhaseMode(player: Player): void {
           // Update speedometer to show new state
           enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
         } else {
-          // They're already in the target mode, just remove abilities
+          // They're already in the target mode, just remove invulnerability
           world.sendMessage(`§e${playerName} is no longer phasing (invulnerability removed)`);
 
           // Update speedometer to show new state
@@ -251,6 +301,7 @@ function initializePlayerTracking(player: Player): PhasePlayerData {
     previousSpeed: 0,
     inactiveFrames: 0,
     previousGameMode: player.getGameMode(),
+    velocity: player.getVelocity(),
   };
 }
 
@@ -273,6 +324,9 @@ function updateExistingPhasePlayer(player: Player, phaseData: PhasePlayerData): 
     } else {
       phaseData.inactiveFrames = 0;
     }
+
+    // Store current velocity for smooth transitions when exiting spectator
+    phaseData.velocity = player.getVelocity();
   } catch (e: any) {
     if (config.debugMessages) {
       world.sendMessage(`§c${player.name}: ${e.message}`);
@@ -291,6 +345,7 @@ function updateRegularPlayer(player: Player): void {
     const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
     playerData.lastPosition = player.location;
     playerData.previousSpeed = currentSpeed;
+    playerData.velocity = player.getVelocity(); // Update stored velocity
 
     if (currentSpeed > config.speedThresholdBps) {
       if (config.debugMessages) {
@@ -373,6 +428,34 @@ function isBlockAheadOfPlayer(player: Player, maxDistance: number = config.phase
     }
     // Default to true on error (safer)
     return true;
+  }
+}
+
+/**
+ * Continuously checks for blocks ahead of players in spectator mode
+ * and returns them to normal mode if no blocks are ahead
+ */
+function checkSpectatorPlayersForBlocks(): void {
+  for (const [playerId, phaseData] of playersInPhaseMode.entries()) {
+    try {
+      const player = phaseData.player;
+
+      // Only check players in spectator mode
+      if (player && player.id && player.isValid?.() && player.getGameMode() === GameMode.spectator) {
+        // Check if there's a block ahead
+        if (!isBlockAheadOfPlayer(player)) {
+          // No block ahead, switch back to normal mode but preserve velocity
+          if (config.debugMessages) {
+            world.sendMessage(`§a${player.name} has no blocks ahead, returning to normal mode`);
+          }
+          exitPhaseMode(player, true);
+        }
+      }
+    } catch (e) {
+      if (config.debugMessages) {
+        world.sendMessage(`§cError checking spectator player for blocks: ${e}`);
+      }
+    }
   }
 }
 
@@ -483,6 +566,9 @@ export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
     ...newConfig,
   };
 
+  // Sync invulnerability debug setting
+  setInvulnerabilityDebug(config.debugMessages);
+
   // Update speedometers for all players when config changes
   updateAllSpeedometers();
   if (config.debugMessages) {
@@ -521,8 +607,14 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
         config.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"
       })`
     );
+
+    // Set debug mode for the invulnerability system
+    setInvulnerabilityDebug(config.debugMessages);
+
     // Clear any existing players in phase mode
-    playersInPhaseMode.clear(); // Initialize tracking and enable speedometer for all current players
+    playersInPhaseMode.clear();
+
+    // Initialize tracking and enable speedometer for all current players
     for (const player of world.getAllPlayers()) {
       try {
         // Enable speedometer for ALL players regardless of game mode
@@ -549,11 +641,22 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
         system.clearRun(updateIntervalId);
         updateIntervalId = undefined;
       }
+      if (spectatorCheckIntervalId !== undefined) {
+        system.clearRun(spectatorCheckIntervalId);
+        spectatorCheckIntervalId = undefined;
+      }
     } catch (e) {
       // No previous interval exists or error clearing it
-      world.sendMessage(`§cWarning: Could not clear previous update interval: ${e}`);
-    } // Set up regular update interval for phase mode system
-    updateIntervalId = system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval); // Set up player join handler to enable speedometer for new players
+      world.sendMessage(`§cWarning: Could not clear previous update intervals: ${e}`);
+    }
+
+    // Set up regular update interval for phase mode system
+    updateIntervalId = system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval);
+
+    // Set up interval to check spectator players for blocks
+    spectatorCheckIntervalId = system.runInterval(checkSpectatorPlayersForBlocks, config.spectatorBlockCheckInterval);
+
+    // Set up player join handler to enable speedometer for new players
     world.afterEvents.playerJoin.subscribe((event) => {
       try {
         const playerId = event.playerId;
@@ -573,11 +676,17 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
       }
     });
 
-    // Verify the interval was created successfully
+    // Verify the intervals were created successfully
     if (updateIntervalId === undefined) {
       world.sendMessage(`§cWARNING: Failed to create update interval`);
     } else {
       world.sendMessage(`§aPhantom Phase system is now monitoring player speeds (interval ID: ${updateIntervalId})`);
+    }
+
+    if (spectatorCheckIntervalId === undefined) {
+      world.sendMessage(`§cWARNING: Failed to create spectator check interval`);
+    } else {
+      world.sendMessage(`§aSpectator block checking active (interval ID: ${spectatorCheckIntervalId})`);
     }
 
     // Run an immediate check of all players to ensure system is working
