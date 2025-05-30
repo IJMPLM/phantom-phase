@@ -7,7 +7,7 @@ function mainTick() {
   ticksSinceLoad++;
 
   if (ticksSinceLoad === 60) {
-    world.sendMessage("§6Phantom Phase system starting minBps: 8...");
+    world.sendMessage("§6Phantom Phase system with speedometer2...");
     initialize();
   }
 

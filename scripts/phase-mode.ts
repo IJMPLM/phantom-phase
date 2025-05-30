@@ -1,4 +1,5 @@
 import { world, system, Entity, GameMode, Player, Vector3 } from "@minecraft/server";
+import { enableSpeedometer, disableSpeedometer } from "./phase-mode-speedometer";
 
 // Configuration interface for phantom phase system
 interface PhaseConfig {
@@ -138,18 +139,23 @@ function exitPhaseMode(player: Player): void {
         if (!player || !player.id || !player.isValid?.()) {
           world.sendMessage(`§cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
           return;
-        }
-
-        // Check current game mode and switch if appropriate
+        } // Check current game mode and switch if appropriate
         const currentMode = player.getGameMode();
         if (currentMode === GameMode.spectator) {
           // Explicitly force target mode
           player.setGameMode(targetMode);
+
+          // Update speedometer to show new state but don't disable it
+          enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
+
           world.sendMessage(`§a${playerName} has returned to reality! (back to ${targetMode} mode)`);
         } else if (currentMode !== targetMode) {
           // They're in an unexpected mode, but not spectator
           world.sendMessage(`§e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
           player.setGameMode(targetMode);
+
+          // Update speedometer to show new state
+          enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
         } else {
           // They're already in the target mode somehow
           world.sendMessage(`§e${playerName} is already in ${targetMode} mode`);
@@ -387,6 +393,23 @@ function cleanupDisconnectedPlayers(): void {
 }
 
 /**
+ * Updates speedometer displays for all players
+ */
+function updateAllSpeedometers(): void {
+  for (const player of world.getAllPlayers()) {
+    try {
+      if (player && player.id && player.isValid?.()) {
+        enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
+      }
+    } catch (e) {
+      if (config.debugMessages) {
+        world.sendMessage(`§cError updating speedometer for ${player.name}: ${e}`);
+      }
+    }
+  }
+}
+
+/**
  * Update the phantom phase configuration
  */
 export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
@@ -394,6 +417,9 @@ export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
     ...config,
     ...newConfig,
   };
+
+  // Update speedometers for all players when config changes
+  updateAllSpeedometers();
 
   if (config.debugMessages) {
     world.sendMessage(`§7Phase mode configuration updated:`);
@@ -411,27 +437,26 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
     if (customConfig) {
       updatePhaseConfig(customConfig);
     }
-
     world.sendMessage("§2Phantom Phase system activated!");
     world.sendMessage(`§7Phase speed threshold: §f${config.speedThresholdBps.toFixed(1)} §7blocks/second`);
     world.sendMessage(`§7Exit speed threshold: §f${config.exitSpeedThresholdBps.toFixed(1)} §7blocks/second`);
     world.sendMessage(`§7Mode change delay: §f${config.inactiveFramesThreshold} §7frames`);
-
     // Clear any existing players in phase mode
-    playersInPhaseMode.clear();
-
-    // Initialize tracking for all current players
+    playersInPhaseMode.clear(); // Initialize tracking and enable speedometer for all current players
     for (const player of world.getAllPlayers()) {
       try {
-        if (
-          player &&
-          player.id &&
-          player.isValid?.() !== false &&
-          !playersInPhaseMode.has(player.id) &&
-          player.getGameMode() !== GameMode.creative &&
-          player.getGameMode() !== GameMode.spectator
-        ) {
-          playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+        // Enable speedometer for ALL players regardless of game mode
+        if (player && player.id && player.isValid?.() !== false) {
+          enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, false);
+
+          // Only track non-creative/spectator players for phase mode
+          if (
+            !playersInPhaseMode.has(player.id) &&
+            player.getGameMode() !== GameMode.creative &&
+            player.getGameMode() !== GameMode.spectator
+          ) {
+            playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+          }
         }
       } catch (playerError) {
         world.sendMessage(`§cError initializing player ${player?.name || "unknown"}: ${playerError}`);
@@ -447,10 +472,26 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
     } catch (e) {
       // No previous interval exists or error clearing it
       world.sendMessage(`§cWarning: Could not clear previous update interval: ${e}`);
-    }
+    } // Set up regular update interval for phase mode system
+    updateIntervalId = system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval); // Set up player join handler to enable speedometer for new players
+    world.afterEvents.playerJoin.subscribe((event) => {
+      try {
+        const playerId = event.playerId;
+        const player = world.getAllPlayers().find((p) => p.id === playerId);
 
-    // Set up regular update interval for phase mode system
-    updateIntervalId = system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval);
+        if (player && player.id) {
+          // Enable speedometer for new players
+          enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, false);
+
+          // Track player for phase mode if appropriate
+          if (player.getGameMode() !== GameMode.creative && player.getGameMode() !== GameMode.spectator) {
+            playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+          }
+        }
+      } catch (e) {
+        world.sendMessage(`§cError setting up new player: ${e}`);
+      }
+    });
 
     // Verify the interval was created successfully
     if (updateIntervalId === undefined) {

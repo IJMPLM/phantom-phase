@@ -1,8 +1,138 @@
 // scripts/main.ts
-import { world as world2, system as system2 } from "@minecraft/server";
+import { world as world3, system as system3 } from "@minecraft/server";
 
 // scripts/phase-mode.ts
-import { world, system, GameMode } from "@minecraft/server";
+import { world as world2, system as system2, GameMode as GameMode2 } from "@minecraft/server";
+
+// scripts/phase-mode-speedometer.ts
+import { system, GameMode } from "@minecraft/server";
+var config = {
+  updateInterval: 2,
+  // Update interval in ticks
+  barLength: 20,
+  // Length of the visual bar
+  phaseColor: "\xA7b",
+  // Light blue for phase mode
+  warningColor: "\xA7e",
+  // Yellow for approaching threshold
+  dangerColor: "\xA7c",
+  // Red for below exit threshold
+  safeColor: "\xA7a",
+  // Green for above entry threshold
+  actionBarDuration: 10,
+  // How long to show the action bar (ticks)
+  speedThresholdBps: 25,
+  // Speed threshold to enter phase mode (blocks per second)
+  exitSpeedThresholdBps: 7
+  // Speed threshold to exit phase mode (blocks per second)
+};
+var activeSpeedometers = /* @__PURE__ */ new Map();
+function enableSpeedometer(player, speedThresholdBps, exitSpeedThresholdBps, silent = false) {
+  const entryThreshold = speedThresholdBps ?? config.speedThresholdBps;
+  const exitThreshold = exitSpeedThresholdBps ?? config.exitSpeedThresholdBps;
+  if (activeSpeedometers.has(player.id)) {
+    const data = activeSpeedometers.get(player.id);
+    if (data.entryThreshold !== entryThreshold || data.exitThreshold !== exitThreshold) {
+      data.entryThreshold = entryThreshold;
+      data.exitThreshold = exitThreshold;
+      if (!silent) {
+        player.sendMessage(
+          `\xA7bSpeedometer thresholds updated: Entry ${entryThreshold.toFixed(1)} b/s, Exit ${exitThreshold.toFixed(
+            1
+          )} b/s`
+        );
+      }
+    } else if (!silent) {
+      player.sendMessage("\xA7ePhantom Phase speedometer is already active");
+    }
+    return true;
+  }
+  const updateIntervalId2 = system.runInterval(() => {
+    updateSpeedometer(player, entryThreshold, exitThreshold);
+  }, config.updateInterval);
+  activeSpeedometers.set(player.id, {
+    updateIntervalId: updateIntervalId2,
+    entryThreshold,
+    exitThreshold
+  });
+  if (!silent) {
+    player.sendMessage("\xA7bPhantom Phase speedometer \xA7aactivated");
+    player.sendMessage(
+      `\xA77Entry threshold: \xA7a${entryThreshold.toFixed(1)} b/s, \xA77Exit threshold: \xA7e${exitThreshold.toFixed(1)} b/s`
+    );
+  }
+  return true;
+}
+function disableSpeedometer(player, silent = false) {
+  if (activeSpeedometers.has(player.id)) {
+    const playerData = activeSpeedometers.get(player.id);
+    if (playerData?.updateIntervalId) {
+      system.clearRun(playerData.updateIntervalId);
+    }
+    activeSpeedometers.delete(player.id);
+    if (!silent) {
+      player.sendMessage("\xA7bPhantom Phase speedometer \xA7cdeactivated");
+    }
+    return true;
+  }
+  return false;
+}
+function updateSpeedometer(player, entryThreshold, exitThreshold) {
+  if (!player.isValid?.()) {
+    if (activeSpeedometers.has(player.id)) {
+      disableSpeedometer(player, true);
+    }
+    return;
+  }
+  try {
+    const velocity = player.getVelocity();
+    const speed = 17 * Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2);
+    const isInPhaseMode = player.getGameMode() === GameMode.spectator;
+    const speedometer = createSpeedometerBar(speed, entryThreshold, exitThreshold, isInPhaseMode);
+    player.onScreenDisplay.setActionBar(speedometer);
+  } catch (e) {
+    console.warn("Failed to update speedometer:", e);
+    try {
+      player.onScreenDisplay.setActionBar("\xA7cPhantom Phase speedometer error");
+    } catch {
+    }
+  }
+}
+function createSpeedometerBar(currentSpeed, entryThreshold, exitThreshold, isInPhaseMode) {
+  const position = Math.min(1, Math.max(0, currentSpeed / entryThreshold));
+  const filledSegments = Math.floor(position * config.barLength);
+  let barColor;
+  if (isInPhaseMode) {
+    barColor = currentSpeed < exitThreshold ? config.warningColor : config.phaseColor;
+  } else {
+    barColor = currentSpeed >= entryThreshold ? config.safeColor : currentSpeed >= exitThreshold ? config.warningColor : config.dangerColor;
+  }
+  let bar = "\xA78[";
+  bar += barColor + "\u25A0".repeat(filledSegments);
+  bar += "\xA78" + "\u25A1".repeat(config.barLength - filledSegments);
+  bar += "\xA78]";
+  const phaseStatus = isInPhaseMode ? `${config.phaseColor}PHASE` : `\xA77NORMAL`;
+  const speedDisplay = `\xA7f${currentSpeed.toFixed(1)} b/s`;
+  let indicator = "";
+  if (isInPhaseMode && currentSpeed < exitThreshold + 2) {
+    indicator = system.currentTick % 10 < 5 ? " \xA7e\u26A0 EXIT SOON" : "";
+  } else if (!isInPhaseMode && currentSpeed > entryThreshold - 5) {
+    indicator = " \xA7a\u2191 PHASE READY";
+  }
+  return `\xA7bPhantom ${phaseStatus}\xA7r ${speedDisplay} ${bar}${indicator}`;
+}
+system.afterEvents.scriptEventReceive.subscribe((event) => {
+  if (event.id === "phantom:cleanup_speedometers") {
+    for (const [playerId, playerData] of activeSpeedometers.entries()) {
+      if (playerData.updateIntervalId) {
+        system.clearRun(playerData.updateIntervalId);
+      }
+    }
+    activeSpeedometers.clear();
+  }
+});
+
+// scripts/phase-mode.ts
 var playersInPhaseMode = /* @__PURE__ */ new Map();
 var DEFAULT_CONFIG = {
   speedThresholdBps: 25,
@@ -16,16 +146,16 @@ var DEFAULT_CONFIG = {
   debugMessages: true,
   preserveInventory: true
 };
-var config = { ...DEFAULT_CONFIG };
+var config2 = { ...DEFAULT_CONFIG };
 var updateIntervalId;
-function calculatePlayerSpeed(player, previousPosition, intervalTicks = config.speedCheckInterval) {
+function calculatePlayerSpeed(player, previousPosition, intervalTicks = config2.speedCheckInterval) {
   const velocity = player.getVelocity();
   return 17 * Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2);
 }
 function enterPhaseMode(player) {
-  if (player.getGameMode() === GameMode.spectator) {
-    if (config.debugMessages) {
-      world.sendMessage(`\xA7e${player.name} is already in spectator mode, not entering phase mode again.`);
+  if (player.getGameMode() === GameMode2.spectator) {
+    if (config2.debugMessages) {
+      world2.sendMessage(`\xA7e${player.name} is already in spectator mode, not entering phase mode again.`);
     }
     return;
   }
@@ -38,77 +168,79 @@ function enterPhaseMode(player) {
       inactiveFrames: 0,
       previousGameMode: previousMode
     });
-    system.runTimeout(() => {
+    system2.runTimeout(() => {
       try {
         if (player && player.id && !player.isValid?.()) {
-          world.sendMessage(`\xA7cPlayer ${player.name} is no longer valid, aborting phase mode entry`);
+          world2.sendMessage(`\xA7cPlayer ${player.name} is no longer valid, aborting phase mode entry`);
           playersInPhaseMode.delete(player.id);
           return;
         }
-        if (player.getGameMode() !== GameMode.spectator) {
-          player.setGameMode(GameMode.spectator);
-          world.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+        if (player.getGameMode() !== GameMode2.spectator) {
+          player.setGameMode(GameMode2.spectator);
+          world2.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
         }
       } catch (err) {
-        world.sendMessage(`\xA7cERROR: Failed to set spectator mode: ${err}`);
+        world2.sendMessage(`\xA7cERROR: Failed to set spectator mode: ${err}`);
       }
-    }, config.gameModeSwitchDelay);
+    }, config2.gameModeSwitchDelay);
   } catch (e) {
-    world.sendMessage(`\xA7cERROR: Failed to set ${player.name} to spectator mode: ${e}`);
+    world2.sendMessage(`\xA7cERROR: Failed to set ${player.name} to spectator mode: ${e}`);
   }
 }
 function exitPhaseMode(player) {
   try {
     const phaseData = playersInPhaseMode.get(player.id);
     if (!phaseData) {
-      world.sendMessage(`\xA7cWARNING: No phase data found for ${player.name} when trying to exit phase mode`);
+      world2.sendMessage(`\xA7cWARNING: No phase data found for ${player.name} when trying to exit phase mode`);
       return;
     }
-    const targetMode = phaseData.previousGameMode ?? GameMode.survival;
+    const targetMode = phaseData.previousGameMode ?? GameMode2.survival;
     const playerName = player.name;
     const playerId = player.id;
     playersInPhaseMode.delete(playerId);
-    system.runTimeout(() => {
+    system2.runTimeout(() => {
       try {
         if (!player || !player.id || !player.isValid?.()) {
-          world.sendMessage(`\xA7cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
+          world2.sendMessage(`\xA7cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
           return;
         }
         const currentMode = player.getGameMode();
-        if (currentMode === GameMode.spectator) {
+        if (currentMode === GameMode2.spectator) {
           player.setGameMode(targetMode);
-          world.sendMessage(`\xA7a${playerName} has returned to reality! (back to ${targetMode} mode)`);
+          enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
+          world2.sendMessage(`\xA7a${playerName} has returned to reality! (back to ${targetMode} mode)`);
         } else if (currentMode !== targetMode) {
-          world.sendMessage(`\xA7e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
+          world2.sendMessage(`\xA7e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
           player.setGameMode(targetMode);
+          enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
         } else {
-          world.sendMessage(`\xA7e${playerName} is already in ${targetMode} mode`);
+          world2.sendMessage(`\xA7e${playerName} is already in ${targetMode} mode`);
         }
       } catch (err) {
-        world.sendMessage(`\xA7cERROR: Failed to restore game mode for ${playerName}: ${err}`);
+        world2.sendMessage(`\xA7cERROR: Failed to restore game mode for ${playerName}: ${err}`);
       }
-    }, config.gameModeSwitchDelay);
+    }, config2.gameModeSwitchDelay);
   } catch (e) {
-    world.sendMessage(`\xA7cERROR: Failed to restore ${player.name}'s game mode: ${e}`);
+    world2.sendMessage(`\xA7cERROR: Failed to restore ${player.name}'s game mode: ${e}`);
     playersInPhaseMode.delete(player.id);
   }
 }
 function logPlayerDebugInfo(player) {
-  if (!config.debugMessages || system.currentTick % config.debugUpdateInterval !== 0) {
+  if (!config2.debugMessages || system2.currentTick % config2.debugUpdateInterval !== 0) {
     return;
   }
   const currentPos = player.location;
   const playerData = playersInPhaseMode.get(player.id);
-  const isInPhaseMode = playerData && player.getGameMode() === GameMode.spectator;
+  const isInPhaseMode = playerData && player.getGameMode() === GameMode2.spectator;
   const lastPos = playerData ? playerData.lastPosition : currentPos;
   try {
     const speed = calculatePlayerSpeed(player, lastPos);
-    const speedColor = speed > config.speedThresholdBps ? "\xA7a" : speed > config.exitSpeedThresholdBps ? "\xA7e" : "\xA7c";
-    world.sendMessage(
+    const speedColor = speed > config2.speedThresholdBps ? "\xA7a" : speed > config2.exitSpeedThresholdBps ? "\xA7e" : "\xA7c";
+    world2.sendMessage(
       `\xA77${player.name}: speed=${speedColor}${speed.toFixed(2)} \xA77b/s, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
     );
   } catch (e) {
-    world.sendMessage(
+    world2.sendMessage(
       `\xA77${player.name}: \xA7cSpeed component not available, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
     );
   }
@@ -127,17 +259,17 @@ function updateExistingPhasePlayer(player, phaseData) {
     const currentSpeed = calculatePlayerSpeed(player, phaseData.lastPosition);
     phaseData.lastPosition = player.location;
     phaseData.previousSpeed = currentSpeed;
-    if (currentSpeed < config.exitSpeedThresholdBps) {
+    if (currentSpeed < config2.exitSpeedThresholdBps) {
       phaseData.inactiveFrames++;
-      if (phaseData.inactiveFrames >= config.inactiveFramesThreshold) {
+      if (phaseData.inactiveFrames >= config2.inactiveFramesThreshold) {
         exitPhaseMode(player);
       }
     } else {
       phaseData.inactiveFrames = 0;
     }
   } catch (e) {
-    if (config.debugMessages) {
-      world.sendMessage(`\xA7c${player.name}: ${e.message}`);
+    if (config2.debugMessages) {
+      world2.sendMessage(`\xA7c${player.name}: ${e.message}`);
     }
   }
 }
@@ -147,17 +279,17 @@ function updateRegularPlayer(player) {
     const currentSpeed = calculatePlayerSpeed(player, playerData.lastPosition);
     playerData.lastPosition = player.location;
     playerData.previousSpeed = currentSpeed;
-    if (currentSpeed > config.speedThresholdBps) {
-      if (config.debugMessages) {
-        world.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+    if (currentSpeed > config2.speedThresholdBps) {
+      if (config2.debugMessages) {
+        world2.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
       }
       enterPhaseMode(player);
     } else if (!playersInPhaseMode.has(player.id)) {
       playersInPhaseMode.set(player.id, playerData);
     }
   } catch (e) {
-    if (config.debugMessages) {
-      world.sendMessage(`\xA7c${player.name}: ${e.message}`);
+    if (config2.debugMessages) {
+      world2.sendMessage(`\xA7c${player.name}: ${e.message}`);
     }
   }
 }
@@ -165,28 +297,28 @@ function updatePlayerPhaseState(player) {
   try {
     const currentGameMode = player.getGameMode();
     const isTracked = playersInPhaseMode.has(player.id);
-    if (!isTracked && currentGameMode === GameMode.spectator && !isPhaseModeCaused(player)) {
+    if (!isTracked && currentGameMode === GameMode2.spectator && !isPhaseModeCaused(player)) {
       return;
     }
     const phaseData = playersInPhaseMode.get(player.id);
-    if (phaseData && currentGameMode === GameMode.spectator) {
+    if (phaseData && currentGameMode === GameMode2.spectator) {
       updateExistingPhasePlayer(player, phaseData);
     } else {
       updateRegularPlayer(player);
     }
   } catch (e) {
-    if (config.debugMessages) {
-      world.sendMessage(`\xA7cError updating player phase state: ${e}`);
+    if (config2.debugMessages) {
+      world2.sendMessage(`\xA7cError updating player phase state: ${e}`);
     }
   }
 }
 function isPhaseModeCaused(player) {
   const phaseData = playersInPhaseMode.get(player.id);
-  return !!phaseData && player.getGameMode() === GameMode.spectator;
+  return !!phaseData && player.getGameMode() === GameMode2.spectator;
 }
 function updatePlayersInPhaseMode() {
   cleanupDisconnectedPlayers();
-  const players = world.getAllPlayers();
+  const players = world2.getAllPlayers();
   for (const player of players) {
     try {
       if (player && player.id) {
@@ -194,14 +326,14 @@ function updatePlayersInPhaseMode() {
         updatePlayerPhaseState(player);
       }
     } catch (err) {
-      if (config.debugMessages) {
-        world.sendMessage(`\xA7cError updating player: ${err}`);
+      if (config2.debugMessages) {
+        world2.sendMessage(`\xA7cError updating player: ${err}`);
       }
     }
   }
 }
 function cleanupDisconnectedPlayers() {
-  const onlinePlayers = new Set(world.getAllPlayers().map((p) => p.id));
+  const onlinePlayers = new Set(world2.getAllPlayers().map((p) => p.id));
   for (const [playerId, data] of playersInPhaseMode.entries()) {
     try {
       let shouldRemove = false;
@@ -225,29 +357,43 @@ function cleanupDisconnectedPlayers() {
         }
       }
       if (shouldRemove) {
-        if (config.debugMessages) {
+        if (config2.debugMessages) {
           const playerName = data.player?.name || "Unknown";
-          world.sendMessage(`\xA77Removing player from phase tracking (${reason}): ${playerName}`);
+          world2.sendMessage(`\xA77Removing player from phase tracking (${reason}): ${playerName}`);
         }
         playersInPhaseMode.delete(playerId);
       }
     } catch (e) {
       playersInPhaseMode.delete(playerId);
-      if (config.debugMessages) {
-        world.sendMessage(`\xA7cError during player cleanup: ${e}`);
+      if (config2.debugMessages) {
+        world2.sendMessage(`\xA7cError during player cleanup: ${e}`);
+      }
+    }
+  }
+}
+function updateAllSpeedometers() {
+  for (const player of world2.getAllPlayers()) {
+    try {
+      if (player && player.id && player.isValid?.()) {
+        enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
+      }
+    } catch (e) {
+      if (config2.debugMessages) {
+        world2.sendMessage(`\xA7cError updating speedometer for ${player.name}: ${e}`);
       }
     }
   }
 }
 function updatePhaseConfig(newConfig) {
-  config = {
-    ...config,
+  config2 = {
+    ...config2,
     ...newConfig
   };
-  if (config.debugMessages) {
-    world.sendMessage(`\xA77Phase mode configuration updated:`);
-    world.sendMessage(`\xA77Speed threshold: \xA7f${config.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
-    world.sendMessage(`\xA77Exit threshold: \xA7f${config.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+  updateAllSpeedometers();
+  if (config2.debugMessages) {
+    world2.sendMessage(`\xA77Phase mode configuration updated:`);
+    world2.sendMessage(`\xA77Speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Exit threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
   }
 }
 function initializePhantomPhase(customConfig) {
@@ -255,38 +401,55 @@ function initializePhantomPhase(customConfig) {
     if (customConfig) {
       updatePhaseConfig(customConfig);
     }
-    world.sendMessage("\xA72Phantom Phase system activated!");
-    world.sendMessage(`\xA77Phase speed threshold: \xA7f${config.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
-    world.sendMessage(`\xA77Exit speed threshold: \xA7f${config.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
-    world.sendMessage(`\xA77Mode change delay: \xA7f${config.inactiveFramesThreshold} \xA77frames`);
+    world2.sendMessage("\xA72Phantom Phase system activated!");
+    world2.sendMessage(`\xA77Phase speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Exit speed threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Mode change delay: \xA7f${config2.inactiveFramesThreshold} \xA77frames`);
     playersInPhaseMode.clear();
-    for (const player of world.getAllPlayers()) {
+    for (const player of world2.getAllPlayers()) {
       try {
-        if (player && player.id && player.isValid?.() !== false && !playersInPhaseMode.has(player.id) && player.getGameMode() !== GameMode.creative && player.getGameMode() !== GameMode.spectator) {
-          playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+        if (player && player.id && player.isValid?.() !== false) {
+          enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, false);
+          if (!playersInPhaseMode.has(player.id) && player.getGameMode() !== GameMode2.creative && player.getGameMode() !== GameMode2.spectator) {
+            playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+          }
         }
       } catch (playerError) {
-        world.sendMessage(`\xA7cError initializing player ${player?.name || "unknown"}: ${playerError}`);
+        world2.sendMessage(`\xA7cError initializing player ${player?.name || "unknown"}: ${playerError}`);
       }
     }
     try {
       if (updateIntervalId !== void 0) {
-        system.clearRun(updateIntervalId);
+        system2.clearRun(updateIntervalId);
         updateIntervalId = void 0;
       }
     } catch (e) {
-      world.sendMessage(`\xA7cWarning: Could not clear previous update interval: ${e}`);
+      world2.sendMessage(`\xA7cWarning: Could not clear previous update interval: ${e}`);
     }
-    updateIntervalId = system.runInterval(updatePlayersInPhaseMode, config.speedCheckInterval);
+    updateIntervalId = system2.runInterval(updatePlayersInPhaseMode, config2.speedCheckInterval);
+    world2.afterEvents.playerJoin.subscribe((event) => {
+      try {
+        const playerId = event.playerId;
+        const player = world2.getAllPlayers().find((p) => p.id === playerId);
+        if (player && player.id) {
+          enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, false);
+          if (player.getGameMode() !== GameMode2.creative && player.getGameMode() !== GameMode2.spectator) {
+            playersInPhaseMode.set(player.id, initializePlayerTracking(player));
+          }
+        }
+      } catch (e) {
+        world2.sendMessage(`\xA7cError setting up new player: ${e}`);
+      }
+    });
     if (updateIntervalId === void 0) {
-      world.sendMessage(`\xA7cWARNING: Failed to create update interval`);
+      world2.sendMessage(`\xA7cWARNING: Failed to create update interval`);
     } else {
-      world.sendMessage(`\xA7aPhantom Phase system is now monitoring player speeds (interval ID: ${updateIntervalId})`);
+      world2.sendMessage(`\xA7aPhantom Phase system is now monitoring player speeds (interval ID: ${updateIntervalId})`);
     }
-    system.runTimeout(updatePlayersInPhaseMode, 1);
+    system2.runTimeout(updatePlayersInPhaseMode, 1);
     return true;
   } catch (e) {
-    world.sendMessage(`\xA7cFailed to initialize Phantom Phase system: ${e}`);
+    world2.sendMessage(`\xA7cFailed to initialize Phantom Phase system: ${e}`);
     return false;
   }
 }
@@ -296,10 +459,10 @@ var ticksSinceLoad = 0;
 function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 60) {
-    world2.sendMessage("\xA76Phantom Phase system starting minBps: 8...");
+    world3.sendMessage("\xA76Phantom Phase system with speedometer2...");
     initialize();
   }
-  system2.run(mainTick);
+  system3.run(mainTick);
 }
 function initialize() {
   initializePhantomPhase({
@@ -315,6 +478,6 @@ function initialize() {
     // Don't lose inventory during mode changes
   });
 }
-system2.run(mainTick);
+system3.run(mainTick);
 
 //# sourceMappingURL=../debug/main.js.map
