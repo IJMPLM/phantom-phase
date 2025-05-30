@@ -13,6 +13,8 @@ interface PhaseConfig {
   preserveInventory: boolean; // Whether to preserve inventory during mode changes
   gameModeSwitchDelay: number; // Delay in ticks for game mode switches (improves reliability)
   strictValidation: boolean; // Whether to use strict player validation
+  phaseBlockCheckDistance: number; // Distance to check for blocks ahead before entering spectator mode
+  alwaysUseSpectator: boolean; // Whether to always use spectator mode regardless of blocks ahead
 }
 
 // Player phase mode data type
@@ -39,6 +41,8 @@ const DEFAULT_CONFIG: PhaseConfig = {
   strictValidation: true,
   debugMessages: true,
   preserveInventory: true,
+  phaseBlockCheckDistance: 10, // Check 10 blocks ahead by default
+  alwaysUseSpectator: false, // Only use spectator when blocks are ahead
 };
 
 // Active configuration
@@ -61,10 +65,12 @@ function calculatePlayerSpeed(
 }
 
 /**
- * Switches player to spectator mode and adds them to phase mode tracking
+ * Switches player to spectator mode (or invulnerable mode) and adds them to phase mode tracking
+ * If there's a block ahead or alwaysUseSpectator is true: enters spectator mode
+ * Otherwise: keeps current game mode but makes player invulnerable
  */
 function enterPhaseMode(player: Player): void {
-  // Prevent redundant mode changes
+  // Prevent redundant mode changes if already in spectator
   if (player.getGameMode() === GameMode.spectator) {
     if (config.debugMessages) {
       world.sendMessage(`§e${player.name} is already in spectator mode, not entering phase mode again.`);
@@ -84,6 +90,10 @@ function enterPhaseMode(player: Player): void {
       inactiveFrames: 0,
       previousGameMode: previousMode,
     });
+
+    // Check if there's a block ahead or if we should always use spectator
+    const shouldUseSpectator = config.alwaysUseSpectator || isBlockAheadOfPlayer(player);
+
     // Queue the game mode change to happen after a delay for better reliability
     system.runTimeout(() => {
       try {
@@ -94,24 +104,38 @@ function enterPhaseMode(player: Player): void {
           return;
         }
 
-        // Double check that player hasn't already changed modes
-        if (player.getGameMode() !== GameMode.spectator) {
-          // Explicitly force spectator mode
-          player.setGameMode(GameMode.spectator);
-          world.sendMessage(`§b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+        if (shouldUseSpectator) {
+          // Double check that player hasn't already changed modes
+          if (player.getGameMode() !== GameMode.spectator) {
+            // Explicitly force spectator mode
+            player.setGameMode(GameMode.spectator);
+            world.sendMessage(`§b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+          }
+        } else {
+          // Make player invulnerable but keep their current game mode
+          // Apply abilities for invulnerability
+          try {
+            player.runCommand("ability @s mayfly true");
+            player.runCommand("ability @s invulnerable true");
+            world.sendMessage(`§d${player.name} is phasing (staying in ${previousMode} mode with invulnerability)`);
+          } catch (abilityError) {
+            world.sendMessage(`§cERROR: Failed to apply abilities: ${abilityError}`);
+          }
         }
       } catch (err) {
-        world.sendMessage(`§cERROR: Failed to set spectator mode: ${err}`);
-        // Clean up tracking data on failure        playersInPhaseMode.delete(player.id);
+        world.sendMessage(`§cERROR: Failed to set phase mode: ${err}`);
+        // Clean up tracking data on failure
+        playersInPhaseMode.delete(player.id);
       }
     }, config.gameModeSwitchDelay); // Configurable delay for stability
   } catch (e) {
-    world.sendMessage(`§cERROR: Failed to set ${player.name} to spectator mode: ${e}`);
+    world.sendMessage(`§cERROR: Failed to set ${player.name} to phase mode: ${e}`);
   }
 }
 
 /**
- * Switches player back to survival mode and removes them from phase tracking
+ * Switches player back to their previous mode and removes them from phase tracking
+ * Removes invulnerability if it was applied
  */
 function exitPhaseMode(player: Player): void {
   try {
@@ -139,8 +163,19 @@ function exitPhaseMode(player: Player): void {
         if (!player || !player.id || !player.isValid?.()) {
           world.sendMessage(`§cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
           return;
-        } // Check current game mode and switch if appropriate
+        }
+
+        // Check current game mode and switch if appropriate
         const currentMode = player.getGameMode();
+
+        // Remove any abilities granted (invulnerability, etc.)
+        try {
+          player.runCommand("ability @s mayfly false");
+          player.runCommand("ability @s invulnerable false");
+        } catch (e) {
+          // Ignore ability errors, they're not critical
+        }
+
         if (currentMode === GameMode.spectator) {
           // Explicitly force target mode
           player.setGameMode(targetMode);
@@ -150,15 +185,18 @@ function exitPhaseMode(player: Player): void {
 
           world.sendMessage(`§a${playerName} has returned to reality! (back to ${targetMode} mode)`);
         } else if (currentMode !== targetMode) {
-          // They're in an unexpected mode, but not spectator
+          // They're in an unexpected mode, switch to target mode
           world.sendMessage(`§e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
           player.setGameMode(targetMode);
 
           // Update speedometer to show new state
           enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
         } else {
-          // They're already in the target mode somehow
-          world.sendMessage(`§e${playerName} is already in ${targetMode} mode`);
+          // They're already in the target mode, just remove abilities
+          world.sendMessage(`§e${playerName} is no longer phasing (invulnerability removed)`);
+
+          // Update speedometer to show new state
+          enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
         }
       } catch (err) {
         world.sendMessage(`§cERROR: Failed to restore game mode for ${playerName}: ${err}`);
@@ -303,12 +341,39 @@ function updatePlayerPhaseState(player: Player): void {
 }
 
 /**
- * Checks if the player is in spectator mode because of our phase system
+ * Checks if the player is in phase mode (spectator or invulnerable)
  * rather than manually switching to spectator
  */
 function isPhaseModeCaused(player: Player): boolean {
+  // If the player is being tracked, they're in phase mode
   const phaseData = playersInPhaseMode.get(player.id);
-  return !!phaseData && player.getGameMode() === GameMode.spectator;
+  return !!phaseData;
+}
+
+/**
+ * Checks if there's a solid block within the specified distance in front of the player
+ * @param player The player to check
+ * @param maxDistance Maximum distance to check for blocks (default: 10)
+ * @returns True if a solid block is found within the distance
+ */
+function isBlockAheadOfPlayer(player: Player, maxDistance: number = config.phaseBlockCheckDistance): boolean {
+  try {
+    // Get the block the player is looking at with specified max distance
+    const blockRaycastHit = player.getBlockFromViewDirection({ maxDistance });
+
+    // If we found a block and it's solid, return true
+    if (blockRaycastHit && blockRaycastHit.block) {
+      return true;
+    }
+
+    return false;
+  } catch (e) {
+    if (config.debugMessages) {
+      world.sendMessage(`§cError checking blocks ahead: ${e}`);
+    }
+    // Default to true on error (safer)
+    return true;
+  }
 }
 
 /**
@@ -420,11 +485,20 @@ export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
 
   // Update speedometers for all players when config changes
   updateAllSpeedometers();
-
   if (config.debugMessages) {
     world.sendMessage(`§7Phase mode configuration updated:`);
     world.sendMessage(`§7Speed threshold: §f${config.speedThresholdBps.toFixed(1)} §7blocks/second`);
     world.sendMessage(`§7Exit threshold: §f${config.exitSpeedThresholdBps.toFixed(1)} §7blocks/second`);
+
+    // Only show the block check settings if they were changed
+    if (newConfig.phaseBlockCheckDistance !== undefined || newConfig.alwaysUseSpectator !== undefined) {
+      world.sendMessage(`§7Block check distance: §f${config.phaseBlockCheckDistance} §7blocks`);
+      world.sendMessage(
+        `§7Always use spectator: §f${config.alwaysUseSpectator ? "Yes" : "No"} §7(${
+          config.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"
+        })`
+      );
+    }
   }
 }
 
@@ -441,6 +515,12 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
     world.sendMessage(`§7Phase speed threshold: §f${config.speedThresholdBps.toFixed(1)} §7blocks/second`);
     world.sendMessage(`§7Exit speed threshold: §f${config.exitSpeedThresholdBps.toFixed(1)} §7blocks/second`);
     world.sendMessage(`§7Mode change delay: §f${config.inactiveFramesThreshold} §7frames`);
+    world.sendMessage(`§7Block check distance: §f${config.phaseBlockCheckDistance} §7blocks`);
+    world.sendMessage(
+      `§7Always use spectator: §f${config.alwaysUseSpectator ? "Yes" : "No"} §7(${
+        config.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"
+      })`
+    );
     // Clear any existing players in phase mode
     playersInPhaseMode.clear(); // Initialize tracking and enable speedometer for all current players
     for (const player of world.getAllPlayers()) {

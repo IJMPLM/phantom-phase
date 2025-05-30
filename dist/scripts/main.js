@@ -144,7 +144,11 @@ var DEFAULT_CONFIG = {
   gameModeSwitchDelay: 1,
   strictValidation: true,
   debugMessages: true,
-  preserveInventory: true
+  preserveInventory: true,
+  phaseBlockCheckDistance: 10,
+  // Check 10 blocks ahead by default
+  alwaysUseSpectator: false
+  // Only use spectator when blocks are ahead
 };
 var config2 = { ...DEFAULT_CONFIG };
 var updateIntervalId;
@@ -168,6 +172,7 @@ function enterPhaseMode(player) {
       inactiveFrames: 0,
       previousGameMode: previousMode
     });
+    const shouldUseSpectator = config2.alwaysUseSpectator || isBlockAheadOfPlayer(player);
     system2.runTimeout(() => {
       try {
         if (player && player.id && !player.isValid?.()) {
@@ -175,16 +180,27 @@ function enterPhaseMode(player) {
           playersInPhaseMode.delete(player.id);
           return;
         }
-        if (player.getGameMode() !== GameMode2.spectator) {
-          player.setGameMode(GameMode2.spectator);
-          world2.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+        if (shouldUseSpectator) {
+          if (player.getGameMode() !== GameMode2.spectator) {
+            player.setGameMode(GameMode2.spectator);
+            world2.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+          }
+        } else {
+          try {
+            player.runCommand("ability @s mayfly true");
+            player.runCommand("ability @s invulnerable true");
+            world2.sendMessage(`\xA7d${player.name} is phasing (staying in ${previousMode} mode with invulnerability)`);
+          } catch (abilityError) {
+            world2.sendMessage(`\xA7cERROR: Failed to apply abilities: ${abilityError}`);
+          }
         }
       } catch (err) {
-        world2.sendMessage(`\xA7cERROR: Failed to set spectator mode: ${err}`);
+        world2.sendMessage(`\xA7cERROR: Failed to set phase mode: ${err}`);
+        playersInPhaseMode.delete(player.id);
       }
     }, config2.gameModeSwitchDelay);
   } catch (e) {
-    world2.sendMessage(`\xA7cERROR: Failed to set ${player.name} to spectator mode: ${e}`);
+    world2.sendMessage(`\xA7cERROR: Failed to set ${player.name} to phase mode: ${e}`);
   }
 }
 function exitPhaseMode(player) {
@@ -205,6 +221,11 @@ function exitPhaseMode(player) {
           return;
         }
         const currentMode = player.getGameMode();
+        try {
+          player.runCommand("ability @s mayfly false");
+          player.runCommand("ability @s invulnerable false");
+        } catch (e) {
+        }
         if (currentMode === GameMode2.spectator) {
           player.setGameMode(targetMode);
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
@@ -214,7 +235,8 @@ function exitPhaseMode(player) {
           player.setGameMode(targetMode);
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
         } else {
-          world2.sendMessage(`\xA7e${playerName} is already in ${targetMode} mode`);
+          world2.sendMessage(`\xA7e${playerName} is no longer phasing (invulnerability removed)`);
+          enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
         }
       } catch (err) {
         world2.sendMessage(`\xA7cERROR: Failed to restore game mode for ${playerName}: ${err}`);
@@ -314,7 +336,21 @@ function updatePlayerPhaseState(player) {
 }
 function isPhaseModeCaused(player) {
   const phaseData = playersInPhaseMode.get(player.id);
-  return !!phaseData && player.getGameMode() === GameMode2.spectator;
+  return !!phaseData;
+}
+function isBlockAheadOfPlayer(player, maxDistance = config2.phaseBlockCheckDistance) {
+  try {
+    const blockRaycastHit = player.getBlockFromViewDirection({ maxDistance });
+    if (blockRaycastHit && blockRaycastHit.block) {
+      return true;
+    }
+    return false;
+  } catch (e) {
+    if (config2.debugMessages) {
+      world2.sendMessage(`\xA7cError checking blocks ahead: ${e}`);
+    }
+    return true;
+  }
 }
 function updatePlayersInPhaseMode() {
   cleanupDisconnectedPlayers();
@@ -394,6 +430,12 @@ function updatePhaseConfig(newConfig) {
     world2.sendMessage(`\xA77Phase mode configuration updated:`);
     world2.sendMessage(`\xA77Speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
     world2.sendMessage(`\xA77Exit threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    if (newConfig.phaseBlockCheckDistance !== void 0 || newConfig.alwaysUseSpectator !== void 0) {
+      world2.sendMessage(`\xA77Block check distance: \xA7f${config2.phaseBlockCheckDistance} \xA77blocks`);
+      world2.sendMessage(
+        `\xA77Always use spectator: \xA7f${config2.alwaysUseSpectator ? "Yes" : "No"} \xA77(${config2.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"})`
+      );
+    }
   }
 }
 function initializePhantomPhase(customConfig) {
@@ -405,6 +447,10 @@ function initializePhantomPhase(customConfig) {
     world2.sendMessage(`\xA77Phase speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
     world2.sendMessage(`\xA77Exit speed threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
     world2.sendMessage(`\xA77Mode change delay: \xA7f${config2.inactiveFramesThreshold} \xA77frames`);
+    world2.sendMessage(`\xA77Block check distance: \xA7f${config2.phaseBlockCheckDistance} \xA77blocks`);
+    world2.sendMessage(
+      `\xA77Always use spectator: \xA7f${config2.alwaysUseSpectator ? "Yes" : "No"} \xA77(${config2.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"})`
+    );
     playersInPhaseMode.clear();
     for (const player of world2.getAllPlayers()) {
       try {
@@ -474,8 +520,12 @@ function initialize() {
     // Wait this many frames below exit speed before leaving phase mode
     debugMessages: true,
     // Show debug messages
-    preserveInventory: true
+    preserveInventory: true,
     // Don't lose inventory during mode changes
+    phaseBlockCheckDistance: 10,
+    // Check for blocks this many blocks ahead
+    alwaysUseSpectator: false
+    // Only use spectator when blocks are ahead
   });
 }
 system3.run(mainTick);
