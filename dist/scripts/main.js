@@ -1,5 +1,5 @@
 // scripts/main.ts
-import { world as world4, system as system4 } from "@minecraft/server";
+import { world as world4, system as system4, EquipmentSlot } from "@minecraft/server";
 
 // scripts/phase-mode.ts
 import { world as world3, system as system3, GameMode as GameMode2 } from "@minecraft/server";
@@ -707,35 +707,74 @@ function disablePhaseMode() {
 
 // scripts/main.ts
 var ticksSinceLoad = 0;
+var phantomPhaseActive = false;
+var helmetCheckInterval;
+var PHASE_HEAD = {
+  id: "phantom-phase:phase_head",
+  // The special helmet that activates phase mode
+  checkInterval: 20
+  // Check helmets every 20 ticks (1 second)
+};
 function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 60) {
-    world4.sendMessage("\xA76Phantom Phase system with speedometer2...");
-    enablePhaseMode({
+    world4.sendMessage("\xA76Phantom Phase system initialized...");
+    updatePhaseConfig({
       speedThresholdBps: 25,
-      // Enter phase mode at this speed (blocks/second)
       exitSpeedThresholdBps: 7,
-      // Exit phase mode below this speed
       inactiveFramesThreshold: 20,
-      // Wait this many frames below exit speed before leaving phase mode
       debugMessages: true,
-      // Show debug messages
       preserveInventory: true,
-      // Don't lose inventory during mode changes
       phaseBlockCheckDistance: 10,
-      // Check for blocks this many blocks ahead
       alwaysUseSpectator: false,
-      // Only use spectator when blocks are ahead
       spectatorBlockCheckInterval: 5
-      // Check for blocks every 5 ticks while in spectator mode
     });
-  }
-  if (ticksSinceLoad === 400) {
-    world4.sendMessage("\xA76Disabling Phantom Phase system...");
-    disablePhaseMode();
+    startHeadDetection();
   }
   system4.run(mainTick);
 }
 system4.run(mainTick);
+function startHeadDetection() {
+  if (helmetCheckInterval !== void 0) {
+    system4.clearRun(helmetCheckInterval);
+  }
+  helmetCheckInterval = system4.runInterval(() => {
+    checkAllPlayersHeads();
+  }, PHASE_HEAD.checkInterval);
+  world4.sendMessage("\xA76Head detection activated - wear a o activate phantom phase!");
+}
+function checkAllPlayersHeads() {
+  let anyPlayerWearingHead = false;
+  for (const player of world4.getAllPlayers()) {
+    try {
+      if (isPlayerWearingPhaseHead(player)) {
+        anyPlayerWearingHead = true;
+        break;
+      }
+    } catch (e) {
+      console.warn(`Error checking helmet for player ${player.name}: ${e}`);
+    }
+  }
+  if (anyPlayerWearingHead && !phantomPhaseActive) {
+    enablePhaseMode();
+    phantomPhaseActive = true;
+    world4.sendMessage("\xA7aPhantom Phase activated - special helmet detected!");
+  } else if (!anyPlayerWearingHead && phantomPhaseActive) {
+    disablePhaseMode();
+    phantomPhaseActive = false;
+    world4.sendMessage("\xA7cPhantom Phase deactivated - no special helmets detected");
+  }
+}
+function isPlayerWearingPhaseHead(player) {
+  try {
+    const helmet = player.getComponent("minecraft:equippable")?.getEquipment(EquipmentSlot.Head);
+    if (helmet && helmet.typeId === PHASE_HEAD.id) {
+      return true;
+    }
+  } catch (e) {
+    console.warn(`Error checking helmet: ${e}`);
+  }
+  return false;
+}
 
 //# sourceMappingURL=../debug/main.js.map
