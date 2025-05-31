@@ -1,20 +1,20 @@
 {
-	"format_version": "1.10.0",
-	"minecraft:attachable": {
-		"description": {
-			"identifier": "myname:phase_head",
-			"render_controllers": ["controller.render.armor"],
-			"materials": {
-				"default": "entity_alphatest",
-				"enchanted": "entity_alphatest_glint"
-			},
-			"textures": {
-				"default": "textures/entity/attachable/phase_head",
-				"enchanted": "textures/misc/enchanted_item_glint"
-			},
-			"geometry": {
-				"default": "geometry.phase_head"
-			}
-		}
-	}
+  "format_version": "1.10.0",
+  "minecraft:attachable": {
+    "description": {
+      "identifier": "phantom-phase:phase_head",
+      "render_controllers": ["controller.render.armor"],
+      "materials": {
+        "default": "entity_alphatest",
+        "enchanted": "entity_alphatest_glint"
+      },
+      "textures": {
+        "default": "textures/entity/attachable/phase_head",
+        "enchanted": "textures/misc/enchanted_item_glint"
+      },
+      "geometry": {
+        "default": "geometry.phase_head"
+      }
+    }
+  }
 }
