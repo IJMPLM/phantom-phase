@@ -1,6 +1,7 @@
 // filepath: d:\Repositories\Minecraft\phantom-phase\scripts\phase-mode.ts
 import { world, system, GameMode, Player, Vector3 } from "@minecraft/server";
 import { enableSpeedometer, disableSpeedometer } from "./phase-mode-speedometer";
+import { applyPhaseEndEffects } from "./phase-mode-end";
 
 // Configuration interface for phantom phase system
 interface PhaseConfig {
@@ -212,10 +213,13 @@ function exitPhaseMode(player: Player, preserveVelocity = true): void {
                 }
               }
             }, 1);
-          }
-
-          // Update speedometer to show new state but don't disable it
+          } // Update speedometer to show new state but don't disable it
           enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
+
+          // Apply phase-end effects with a slight delay to ensure game mode change has completed
+          system.runTimeout(() => {
+            applyPhaseEndEffects(player);
+          }, 5);
 
           world.sendMessage(`§a${playerName} has returned to reality! (back to ${targetMode} mode)`);
         } else if (currentMode !== targetMode) {
@@ -225,12 +229,22 @@ function exitPhaseMode(player: Player, preserveVelocity = true): void {
 
           // Update speedometer to show new state
           enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
+
+          // Apply phase-end effects with a slight delay
+          system.runTimeout(() => {
+            applyPhaseEndEffects(player);
+          }, 5);
         } else {
-          // They're already in the target mode, just remove invulnerability
-          world.sendMessage(`§e${playerName} is no longer phasing (invulnerability removed)`);
+          // They're already in the target mode
+          world.sendMessage(`§e${playerName} is no longer phasing`);
 
           // Update speedometer to show new state
           enableSpeedometer(player, config.speedThresholdBps, config.exitSpeedThresholdBps, true);
+
+          // Apply phase-end effects
+          system.runTimeout(() => {
+            applyPhaseEndEffects(player);
+          }, 5);
         }
       } catch (err) {
         world.sendMessage(`§cERROR: Failed to restore game mode for ${playerName}: ${err}`);
@@ -727,9 +741,14 @@ export function disablePhaseMode(): void {
 
     // Clear the players in phase mode map
     playersInPhaseMode.clear();
-
     world.sendMessage("§cPhantom Phase system disabled");
   } catch (e) {
     world.sendMessage(`§cError disabling Phantom Phase system: ${e}`);
   }
 }
+
+/**
+ * Re-export the phase end effects configuration function
+ * for API consistency with other systems
+ */
+export { updatePhaseEndConfig } from "./phase-mode-end";
