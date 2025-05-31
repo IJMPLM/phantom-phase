@@ -204,11 +204,14 @@ function initializeDamageHandler() {
             player.runCommand("ability @s invulnerable true");
           }
           if (player.location.y < -60) {
-            player.teleport({
-              x: player.location.x,
-              y: 0,
-              z: player.location.z
-            }, { dimension: player.dimension });
+            player.teleport(
+              {
+                x: player.location.x,
+                y: 0,
+                z: player.location.z
+              },
+              { dimension: player.dimension }
+            );
             if (debugMessages) {
               console.warn(`[PhaseInvulnerability] Saved ${player.name} from void death`);
             }
