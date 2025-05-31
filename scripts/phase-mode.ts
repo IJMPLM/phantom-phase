@@ -591,7 +591,7 @@ export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
 /**
  * Initializes the phantom phase system that switches fast-moving players to spectator mode
  */
-export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
+export function initializePhaseMode(customConfig?: Partial<PhaseConfig>) {
   try {
     // Apply any custom configuration
     if (customConfig) {
@@ -696,5 +696,63 @@ export function initializePhantomPhase(customConfig?: Partial<PhaseConfig>) {
   } catch (e) {
     world.sendMessage(`§cFailed to initialize Phantom Phase system: ${e}`);
     return false;
+  }
+}
+
+export function enablePhaseMode(customConfig?: Partial<PhaseConfig>): boolean {
+  // If already running, clean up first
+  if (updateIntervalId !== undefined || spectatorCheckIntervalId !== undefined) {
+    disablePhaseMode();
+  }
+
+  return initializePhaseMode(customConfig);
+}
+
+export function disablePhaseMode(): void {
+  try {
+    // Clean up update intervals
+    if (updateIntervalId !== undefined) {
+      system.clearRun(updateIntervalId);
+      updateIntervalId = undefined;
+    }
+
+    if (spectatorCheckIntervalId !== undefined) {
+      system.clearRun(spectatorCheckIntervalId);
+      spectatorCheckIntervalId = undefined;
+    }
+
+    // Exit phase mode for all players currently in it
+    for (const [playerId, phaseData] of playersInPhaseMode.entries()) {
+      try {
+        const player = phaseData.player;
+        if (player && player.id && player.isValid?.()) {
+          // Exit phase mode for this player
+          exitPhaseMode(player, false);
+
+          // Disable their speedometer
+          disableSpeedometer(player);
+        }
+      } catch (e) {
+        world.sendMessage(`§cError exiting phase mode for player: ${e}`);
+      }
+    }
+
+    // Disable speedometers for all players
+    for (const player of world.getAllPlayers()) {
+      try {
+        if (player && player.id && player.isValid?.()) {
+          disableSpeedometer(player);
+        }
+      } catch (e) {
+        // Ignore errors for individual players
+      }
+    }
+
+    // Clear the players in phase mode map
+    playersInPhaseMode.clear();
+
+    world.sendMessage("§cPhantom Phase system disabled");
+  } catch (e) {
+    world.sendMessage(`§cError disabling Phantom Phase system: ${e}`);
   }
 }

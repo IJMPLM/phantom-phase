@@ -591,7 +591,7 @@ function updatePhaseConfig(newConfig) {
     }
   }
 }
-function initializePhantomPhase(customConfig) {
+function initializePhaseMode(customConfig) {
   try {
     if (customConfig) {
       updatePhaseConfig(customConfig);
@@ -663,6 +663,47 @@ function initializePhantomPhase(customConfig) {
     return false;
   }
 }
+function enablePhaseMode(customConfig) {
+  if (updateIntervalId !== void 0 || spectatorCheckIntervalId !== void 0) {
+    disablePhaseMode();
+  }
+  return initializePhaseMode(customConfig);
+}
+function disablePhaseMode() {
+  try {
+    if (updateIntervalId !== void 0) {
+      system3.clearRun(updateIntervalId);
+      updateIntervalId = void 0;
+    }
+    if (spectatorCheckIntervalId !== void 0) {
+      system3.clearRun(spectatorCheckIntervalId);
+      spectatorCheckIntervalId = void 0;
+    }
+    for (const [playerId, phaseData] of playersInPhaseMode.entries()) {
+      try {
+        const player = phaseData.player;
+        if (player && player.id && player.isValid?.()) {
+          exitPhaseMode(player, false);
+          disableSpeedometer(player);
+        }
+      } catch (e) {
+        world3.sendMessage(`\xA7cError exiting phase mode for player: ${e}`);
+      }
+    }
+    for (const player of world3.getAllPlayers()) {
+      try {
+        if (player && player.id && player.isValid?.()) {
+          disableSpeedometer(player);
+        }
+      } catch (e) {
+      }
+    }
+    playersInPhaseMode.clear();
+    world3.sendMessage("\xA7cPhantom Phase system disabled");
+  } catch (e) {
+    world3.sendMessage(`\xA7cError disabling Phantom Phase system: ${e}`);
+  }
+}
 
 // scripts/main.ts
 var ticksSinceLoad = 0;
@@ -670,29 +711,30 @@ function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 60) {
     world4.sendMessage("\xA76Phantom Phase system with speedometer2...");
-    initialize();
+    enablePhaseMode({
+      speedThresholdBps: 25,
+      // Enter phase mode at this speed (blocks/second)
+      exitSpeedThresholdBps: 7,
+      // Exit phase mode below this speed
+      inactiveFramesThreshold: 20,
+      // Wait this many frames below exit speed before leaving phase mode
+      debugMessages: true,
+      // Show debug messages
+      preserveInventory: true,
+      // Don't lose inventory during mode changes
+      phaseBlockCheckDistance: 10,
+      // Check for blocks this many blocks ahead
+      alwaysUseSpectator: false,
+      // Only use spectator when blocks are ahead
+      spectatorBlockCheckInterval: 5
+      // Check for blocks every 5 ticks while in spectator mode
+    });
+  }
+  if (ticksSinceLoad === 400) {
+    world4.sendMessage("\xA76Disabling Phantom Phase system...");
+    disablePhaseMode();
   }
   system4.run(mainTick);
-}
-function initialize() {
-  initializePhantomPhase({
-    speedThresholdBps: 25,
-    // Enter phase mode at this speed (blocks/second)
-    exitSpeedThresholdBps: 7,
-    // Exit phase mode below this speed
-    inactiveFramesThreshold: 20,
-    // Wait this many frames below exit speed before leaving phase mode
-    debugMessages: true,
-    // Show debug messages
-    preserveInventory: true,
-    // Don't lose inventory during mode changes
-    phaseBlockCheckDistance: 10,
-    // Check for blocks this many blocks ahead
-    alwaysUseSpectator: false,
-    // Only use spectator when blocks are ahead
-    spectatorBlockCheckInterval: 5
-    // Check for blocks every 5 ticks while in spectator mode
-  });
 }
 system4.run(mainTick);
 
