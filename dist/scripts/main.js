@@ -1,8 +1,8 @@
 // scripts/main.ts
-import { world as world5, system as system5, EquipmentSlot as EquipmentSlot2 } from "@minecraft/server";
+import { world as world5, system as system5 } from "@minecraft/server";
 
 // scripts/phase-mode.ts
-import { world as world3, system as system3, GameMode as GameMode2 } from "@minecraft/server";
+import { world as world2, system as system2, GameMode as GameMode2 } from "@minecraft/server";
 
 // scripts/phase-mode-speedometer.ts
 import { system, GameMode } from "@minecraft/server";
@@ -132,107 +132,6 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
   }
 });
 
-// scripts/phase-mode-invulnerability.ts
-import { world as world2, system as system2 } from "@minecraft/server";
-var invulnerablePlayers = /* @__PURE__ */ new Set();
-var debugMessages = true;
-function makePlayerInvulnerable(player) {
-  try {
-    invulnerablePlayers.add(player.id);
-    player.runCommand("ability @s mayfly true");
-    player.runCommand("ability @s invulnerable true");
-    player.runCommand("effect @s fire_resistance 1 1 true");
-    if (debugMessages) {
-      console.warn(`[PhaseInvulnerability] Player ${player.name} is now invulnerable`);
-    }
-  } catch (e) {
-    if (debugMessages) {
-      world2.sendMessage(`\xA7cFailed to make ${player.name} invulnerable: ${e}`);
-    }
-  }
-}
-function removePlayerInvulnerability(player) {
-  try {
-    invulnerablePlayers.delete(player.id);
-    player.runCommand("ability @s mayfly false");
-    player.runCommand("ability @s invulnerable false");
-    if (debugMessages) {
-      console.warn(`[PhaseInvulnerability] Player ${player.name} is no longer invulnerable`);
-    }
-  } catch (e) {
-    if (debugMessages) {
-      world2.sendMessage(`\xA7cFailed to remove invulnerability from ${player.name}: ${e}`);
-    }
-  }
-}
-function isPlayerInvulnerable(playerId) {
-  return invulnerablePlayers.has(playerId);
-}
-function setInvulnerabilityDebug(enabled) {
-  debugMessages = enabled;
-}
-function clearInvulnerabilityData() {
-  invulnerablePlayers.clear();
-}
-function initializeDamageHandler() {
-  system2.runInterval(() => {
-    for (const playerId of invulnerablePlayers) {
-      try {
-        const player = world2.getAllPlayers().find((p) => p.id === playerId);
-        if (!player) continue;
-        player.runCommand("ability @s invulnerable true");
-        if (player.hasTag("on_fire") || player.dimension.getBlock(player.location)?.typeId?.includes("lava")) {
-          player.runCommand("effect @s fire_resistance 2 1 true");
-          player.runCommand("execute as @s run tag @s remove on_fire");
-        }
-        if (player.dimension.getBlock(player.location)?.typeId?.includes("water")) {
-          player.runCommand("effect @s water_breathing 2 1 true");
-        }
-      } catch (e) {
-        if (debugMessages) {
-          console.error(`[PhaseInvulnerability] Error in protection handler: ${e}`);
-        }
-      }
-    }
-  }, 5);
-  const tickIntervalId = system2.runInterval(() => {
-    for (const playerId of invulnerablePlayers) {
-      try {
-        const player = world2.getAllPlayers().find((p) => p.id === playerId);
-        if (player) {
-          if (system2.currentTick % 100 === 0) {
-            player.runCommand("ability @s invulnerable true");
-          }
-          if (player.location.y < -60) {
-            player.teleport(
-              {
-                x: player.location.x,
-                y: 0,
-                z: player.location.z
-              },
-              { dimension: player.dimension }
-            );
-            if (debugMessages) {
-              console.warn(`[PhaseInvulnerability] Saved ${player.name} from void death`);
-            }
-          }
-        }
-      } catch (e) {
-        if (debugMessages) {
-          console.error(`[PhaseInvulnerability] Error in tick handler for player: ${e}`);
-        }
-      }
-    }
-  }, 20);
-  system2.afterEvents.scriptEventReceive.subscribe((event) => {
-    if (event.id === "phantom:cleanup_invulnerability") {
-      system2.clearRun(tickIntervalId);
-      clearInvulnerabilityData();
-    }
-  });
-}
-initializeDamageHandler();
-
 // scripts/phase-mode.ts
 var playersInPhaseMode = /* @__PURE__ */ new Map();
 var DEFAULT_CONFIG = {
@@ -263,7 +162,7 @@ function calculatePlayerSpeed(player, previousPosition, intervalTicks = config2.
 function enterPhaseMode(player) {
   if (player.getGameMode() === GameMode2.spectator) {
     if (config2.debugMessages) {
-      world3.sendMessage(`\xA7e${player.name} is already in spectator mode, not entering phase mode again.`);
+      world2.sendMessage(`\xA7e${player.name} is already in spectator mode, not entering phase mode again.`);
     }
     return;
   }
@@ -280,36 +179,33 @@ function enterPhaseMode(player) {
       // Store current velocity for smooth transitions out
     });
     const shouldUseSpectator = config2.alwaysUseSpectator || isBlockAheadOfPlayer(player);
-    system3.runTimeout(() => {
+    system2.runTimeout(() => {
       try {
         if (player && player.id && !player.isValid?.()) {
-          world3.sendMessage(`\xA7cPlayer ${player.name} is no longer valid, aborting phase mode entry`);
+          world2.sendMessage(`\xA7cPlayer ${player.name} is no longer valid, aborting phase mode entry`);
           playersInPhaseMode.delete(player.id);
           return;
         }
         if (shouldUseSpectator) {
           if (player.getGameMode() !== GameMode2.spectator) {
             player.setGameMode(GameMode2.spectator);
-            world3.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
+            world2.sendMessage(`\xA7b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
           }
-        } else {
-          makePlayerInvulnerable(player);
-          world3.sendMessage(`\xA7d${player.name} is phasing (staying in ${previousMode} mode with invulnerability)`);
         }
       } catch (err) {
-        world3.sendMessage(`\xA7cERROR: Failed to set phase mode: ${err}`);
+        world2.sendMessage(`\xA7cERROR: Failed to set phase mode: ${err}`);
         playersInPhaseMode.delete(player.id);
       }
     }, config2.gameModeSwitchDelay);
   } catch (e) {
-    world3.sendMessage(`\xA7cERROR: Failed to set ${player.name} to phase mode: ${e}`);
+    world2.sendMessage(`\xA7cERROR: Failed to set ${player.name} to phase mode: ${e}`);
   }
 }
 function exitPhaseMode(player, preserveVelocity = true) {
   try {
     const phaseData = playersInPhaseMode.get(player.id);
     if (!phaseData) {
-      world3.sendMessage(`\xA7cWARNING: No phase data found for ${player.name} when trying to exit phase mode`);
+      world2.sendMessage(`\xA7cWARNING: No phase data found for ${player.name} when trying to exit phase mode`);
       return;
     }
     const targetMode = phaseData.previousGameMode ?? GameMode2.survival;
@@ -317,20 +213,17 @@ function exitPhaseMode(player, preserveVelocity = true) {
     const playerId = player.id;
     const storedVelocity = phaseData.velocity;
     playersInPhaseMode.delete(playerId);
-    system3.runTimeout(() => {
+    system2.runTimeout(() => {
       try {
         if (!player || !player.id || !player.isValid?.()) {
-          world3.sendMessage(`\xA7cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
+          world2.sendMessage(`\xA7cPlayer ${playerName} is no longer valid, aborting phase mode exit`);
           return;
         }
         const currentMode = player.getGameMode();
-        if (isPlayerInvulnerable(player.id)) {
-          removePlayerInvulnerability(player);
-        }
         if (currentMode === GameMode2.spectator) {
           player.setGameMode(targetMode);
           if (preserveVelocity && storedVelocity) {
-            system3.runTimeout(() => {
+            system2.runTimeout(() => {
               try {
                 const viewDirection = player.getViewDirection();
                 const currentLocation = player.location;
@@ -353,32 +246,32 @@ function exitPhaseMode(player, preserveVelocity = true) {
                 }
               } catch (velocityErr) {
                 if (config2.debugMessages) {
-                  world3.sendMessage(`\xA7cError applying velocity for ${playerName}: ${velocityErr}`);
+                  world2.sendMessage(`\xA7cError applying velocity for ${playerName}: ${velocityErr}`);
                 }
               }
             }, 1);
           }
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
-          world3.sendMessage(`\xA7a${playerName} has returned to reality! (back to ${targetMode} mode)`);
+          world2.sendMessage(`\xA7a${playerName} has returned to reality! (back to ${targetMode} mode)`);
         } else if (currentMode !== targetMode) {
-          world3.sendMessage(`\xA7e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
+          world2.sendMessage(`\xA7e${playerName} is in ${currentMode} mode, restoring to ${targetMode} mode`);
           player.setGameMode(targetMode);
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
         } else {
-          world3.sendMessage(`\xA7e${playerName} is no longer phasing (invulnerability removed)`);
+          world2.sendMessage(`\xA7e${playerName} is no longer phasing (invulnerability removed)`);
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
         }
       } catch (err) {
-        world3.sendMessage(`\xA7cERROR: Failed to restore game mode for ${playerName}: ${err}`);
+        world2.sendMessage(`\xA7cERROR: Failed to restore game mode for ${playerName}: ${err}`);
       }
     }, config2.gameModeSwitchDelay);
   } catch (e) {
-    world3.sendMessage(`\xA7cERROR: Failed to restore ${player.name}'s game mode: ${e}`);
+    world2.sendMessage(`\xA7cERROR: Failed to restore ${player.name}'s game mode: ${e}`);
     playersInPhaseMode.delete(player.id);
   }
 }
 function logPlayerDebugInfo(player) {
-  if (!config2.debugMessages || system3.currentTick % config2.debugUpdateInterval !== 0) {
+  if (!config2.debugMessages || system2.currentTick % config2.debugUpdateInterval !== 0) {
     return;
   }
   const currentPos = player.location;
@@ -388,11 +281,11 @@ function logPlayerDebugInfo(player) {
   try {
     const speed = calculatePlayerSpeed(player, lastPos);
     const speedColor = speed > config2.speedThresholdBps ? "\xA7a" : speed > config2.exitSpeedThresholdBps ? "\xA7e" : "\xA7c";
-    world3.sendMessage(
+    world2.sendMessage(
       `\xA77${player.name}: speed=${speedColor}${speed.toFixed(2)} \xA77b/s, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
     );
   } catch (e) {
-    world3.sendMessage(
+    world2.sendMessage(
       `\xA77${player.name}: \xA7cSpeed component not available, isGliding=${player.isGliding ? "\xA7aYes" : "\xA7cNo"}, gameMode=${player.getGameMode()}, phaseMode=${isInPhaseMode ? "\xA7aYES" : "\xA7cNO"}`
     );
   }
@@ -423,7 +316,7 @@ function updateExistingPhasePlayer(player, phaseData) {
     phaseData.velocity = player.getVelocity();
   } catch (e) {
     if (config2.debugMessages) {
-      world3.sendMessage(`\xA7c${player.name}: ${e.message}`);
+      world2.sendMessage(`\xA7c${player.name}: ${e.message}`);
     }
   }
 }
@@ -436,7 +329,7 @@ function updateRegularPlayer(player) {
     playerData.velocity = player.getVelocity();
     if (currentSpeed > config2.speedThresholdBps) {
       if (config2.debugMessages) {
-        world3.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
+        world2.sendMessage(`\xA7e${player.name} triggered phase mode at ${currentSpeed.toFixed(1)} b/s`);
       }
       enterPhaseMode(player);
     } else if (!playersInPhaseMode.has(player.id)) {
@@ -444,7 +337,7 @@ function updateRegularPlayer(player) {
     }
   } catch (e) {
     if (config2.debugMessages) {
-      world3.sendMessage(`\xA7c${player.name}: ${e.message}`);
+      world2.sendMessage(`\xA7c${player.name}: ${e.message}`);
     }
   }
 }
@@ -463,7 +356,7 @@ function updatePlayerPhaseState(player) {
     }
   } catch (e) {
     if (config2.debugMessages) {
-      world3.sendMessage(`\xA7cError updating player phase state: ${e}`);
+      world2.sendMessage(`\xA7cError updating player phase state: ${e}`);
     }
   }
 }
@@ -480,7 +373,7 @@ function isBlockAheadOfPlayer(player, maxDistance = config2.phaseBlockCheckDista
     return false;
   } catch (e) {
     if (config2.debugMessages) {
-      world3.sendMessage(`\xA7cError checking blocks ahead: ${e}`);
+      world2.sendMessage(`\xA7cError checking blocks ahead: ${e}`);
     }
     return true;
   }
@@ -492,21 +385,21 @@ function checkSpectatorPlayersForBlocks() {
       if (player && player.id && player.isValid?.() && player.getGameMode() === GameMode2.spectator) {
         if (!isBlockAheadOfPlayer(player)) {
           if (config2.debugMessages) {
-            world3.sendMessage(`\xA7a${player.name} has no blocks ahead, returning to normal mode`);
+            world2.sendMessage(`\xA7a${player.name} has no blocks ahead, returning to normal mode`);
           }
           exitPhaseMode(player, true);
         }
       }
     } catch (e) {
       if (config2.debugMessages) {
-        world3.sendMessage(`\xA7cError checking spectator player for blocks: ${e}`);
+        world2.sendMessage(`\xA7cError checking spectator player for blocks: ${e}`);
       }
     }
   }
 }
 function updatePlayersInPhaseMode() {
   cleanupDisconnectedPlayers();
-  const players = world3.getAllPlayers();
+  const players = world2.getAllPlayers();
   for (const player of players) {
     try {
       if (player && player.id) {
@@ -515,13 +408,13 @@ function updatePlayersInPhaseMode() {
       }
     } catch (err) {
       if (config2.debugMessages) {
-        world3.sendMessage(`\xA7cError updating player: ${err}`);
+        world2.sendMessage(`\xA7cError updating player: ${err}`);
       }
     }
   }
 }
 function cleanupDisconnectedPlayers() {
-  const onlinePlayers = new Set(world3.getAllPlayers().map((p) => p.id));
+  const onlinePlayers = new Set(world2.getAllPlayers().map((p) => p.id));
   for (const [playerId, data] of playersInPhaseMode.entries()) {
     try {
       let shouldRemove = false;
@@ -547,27 +440,27 @@ function cleanupDisconnectedPlayers() {
       if (shouldRemove) {
         if (config2.debugMessages) {
           const playerName = data.player?.name || "Unknown";
-          world3.sendMessage(`\xA77Removing player from phase tracking (${reason}): ${playerName}`);
+          world2.sendMessage(`\xA77Removing player from phase tracking (${reason}): ${playerName}`);
         }
         playersInPhaseMode.delete(playerId);
       }
     } catch (e) {
       playersInPhaseMode.delete(playerId);
       if (config2.debugMessages) {
-        world3.sendMessage(`\xA7cError during player cleanup: ${e}`);
+        world2.sendMessage(`\xA7cError during player cleanup: ${e}`);
       }
     }
   }
 }
 function updateAllSpeedometers() {
-  for (const player of world3.getAllPlayers()) {
+  for (const player of world2.getAllPlayers()) {
     try {
       if (player && player.id && player.isValid?.()) {
         enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, true);
       }
     } catch (e) {
       if (config2.debugMessages) {
-        world3.sendMessage(`\xA7cError updating speedometer for ${player.name}: ${e}`);
+        world2.sendMessage(`\xA7cError updating speedometer for ${player.name}: ${e}`);
       }
     }
   }
@@ -577,15 +470,14 @@ function updatePhaseConfig(newConfig) {
     ...config2,
     ...newConfig
   };
-  setInvulnerabilityDebug(config2.debugMessages);
   updateAllSpeedometers();
   if (config2.debugMessages) {
-    world3.sendMessage(`\xA77Phase mode configuration updated:`);
-    world3.sendMessage(`\xA77Speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
-    world3.sendMessage(`\xA77Exit threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Phase mode configuration updated:`);
+    world2.sendMessage(`\xA77Speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Exit threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
     if (newConfig.phaseBlockCheckDistance !== void 0 || newConfig.alwaysUseSpectator !== void 0) {
-      world3.sendMessage(`\xA77Block check distance: \xA7f${config2.phaseBlockCheckDistance} \xA77blocks`);
-      world3.sendMessage(
+      world2.sendMessage(`\xA77Block check distance: \xA7f${config2.phaseBlockCheckDistance} \xA77blocks`);
+      world2.sendMessage(
         `\xA77Always use spectator: \xA7f${config2.alwaysUseSpectator ? "Yes" : "No"} \xA77(${config2.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"})`
       );
     }
@@ -596,17 +488,16 @@ function initializePhaseMode(customConfig) {
     if (customConfig) {
       updatePhaseConfig(customConfig);
     }
-    world3.sendMessage("\xA72Phantom Phase system activated!");
-    world3.sendMessage(`\xA77Phase speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
-    world3.sendMessage(`\xA77Exit speed threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
-    world3.sendMessage(`\xA77Mode change delay: \xA7f${config2.inactiveFramesThreshold} \xA77frames`);
-    world3.sendMessage(`\xA77Block check distance: \xA7f${config2.phaseBlockCheckDistance} \xA77blocks`);
-    world3.sendMessage(
+    world2.sendMessage("\xA72Phantom Phase system activated!");
+    world2.sendMessage(`\xA77Phase speed threshold: \xA7f${config2.speedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Exit speed threshold: \xA7f${config2.exitSpeedThresholdBps.toFixed(1)} \xA77blocks/second`);
+    world2.sendMessage(`\xA77Mode change delay: \xA7f${config2.inactiveFramesThreshold} \xA77frames`);
+    world2.sendMessage(`\xA77Block check distance: \xA7f${config2.phaseBlockCheckDistance} \xA77blocks`);
+    world2.sendMessage(
       `\xA77Always use spectator: \xA7f${config2.alwaysUseSpectator ? "Yes" : "No"} \xA77(${config2.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"})`
     );
-    setInvulnerabilityDebug(config2.debugMessages);
     playersInPhaseMode.clear();
-    for (const player of world3.getAllPlayers()) {
+    for (const player of world2.getAllPlayers()) {
       try {
         if (player && player.id && player.isValid?.() !== false) {
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, false);
@@ -615,27 +506,27 @@ function initializePhaseMode(customConfig) {
           }
         }
       } catch (playerError) {
-        world3.sendMessage(`\xA7cError initializing player ${player?.name || "unknown"}: ${playerError}`);
+        world2.sendMessage(`\xA7cError initializing player ${player?.name || "unknown"}: ${playerError}`);
       }
     }
     try {
       if (updateIntervalId !== void 0) {
-        system3.clearRun(updateIntervalId);
+        system2.clearRun(updateIntervalId);
         updateIntervalId = void 0;
       }
       if (spectatorCheckIntervalId !== void 0) {
-        system3.clearRun(spectatorCheckIntervalId);
+        system2.clearRun(spectatorCheckIntervalId);
         spectatorCheckIntervalId = void 0;
       }
     } catch (e) {
-      world3.sendMessage(`\xA7cWarning: Could not clear previous update intervals: ${e}`);
+      world2.sendMessage(`\xA7cWarning: Could not clear previous update intervals: ${e}`);
     }
-    updateIntervalId = system3.runInterval(updatePlayersInPhaseMode, config2.speedCheckInterval);
-    spectatorCheckIntervalId = system3.runInterval(checkSpectatorPlayersForBlocks, config2.spectatorBlockCheckInterval);
-    world3.afterEvents.playerJoin.subscribe((event) => {
+    updateIntervalId = system2.runInterval(updatePlayersInPhaseMode, config2.speedCheckInterval);
+    spectatorCheckIntervalId = system2.runInterval(checkSpectatorPlayersForBlocks, config2.spectatorBlockCheckInterval);
+    world2.afterEvents.playerJoin.subscribe((event) => {
       try {
         const playerId = event.playerId;
-        const player = world3.getAllPlayers().find((p) => p.id === playerId);
+        const player = world2.getAllPlayers().find((p) => p.id === playerId);
         if (player && player.id) {
           enableSpeedometer(player, config2.speedThresholdBps, config2.exitSpeedThresholdBps, false);
           if (player.getGameMode() !== GameMode2.creative && player.getGameMode() !== GameMode2.spectator) {
@@ -643,23 +534,23 @@ function initializePhaseMode(customConfig) {
           }
         }
       } catch (e) {
-        world3.sendMessage(`\xA7cError setting up new player: ${e}`);
+        world2.sendMessage(`\xA7cError setting up new player: ${e}`);
       }
     });
     if (updateIntervalId === void 0) {
-      world3.sendMessage(`\xA7cWARNING: Failed to create update interval`);
+      world2.sendMessage(`\xA7cWARNING: Failed to create update interval`);
     } else {
-      world3.sendMessage(`\xA7aPhantom Phase system is now monitoring player speeds (interval ID: ${updateIntervalId})`);
+      world2.sendMessage(`\xA7aPhantom Phase system is now monitoring player speeds (interval ID: ${updateIntervalId})`);
     }
     if (spectatorCheckIntervalId === void 0) {
-      world3.sendMessage(`\xA7cWARNING: Failed to create spectator check interval`);
+      world2.sendMessage(`\xA7cWARNING: Failed to create spectator check interval`);
     } else {
-      world3.sendMessage(`\xA7aSpectator block checking active (interval ID: ${spectatorCheckIntervalId})`);
+      world2.sendMessage(`\xA7aSpectator block checking active (interval ID: ${spectatorCheckIntervalId})`);
     }
-    system3.runTimeout(updatePlayersInPhaseMode, 1);
+    system2.runTimeout(updatePlayersInPhaseMode, 1);
     return true;
   } catch (e) {
-    world3.sendMessage(`\xA7cFailed to initialize Phantom Phase system: ${e}`);
+    world2.sendMessage(`\xA7cFailed to initialize Phantom Phase system: ${e}`);
     return false;
   }
 }
@@ -672,11 +563,11 @@ function enablePhaseMode(customConfig) {
 function disablePhaseMode() {
   try {
     if (updateIntervalId !== void 0) {
-      system3.clearRun(updateIntervalId);
+      system2.clearRun(updateIntervalId);
       updateIntervalId = void 0;
     }
     if (spectatorCheckIntervalId !== void 0) {
-      system3.clearRun(spectatorCheckIntervalId);
+      system2.clearRun(spectatorCheckIntervalId);
       spectatorCheckIntervalId = void 0;
     }
     for (const [playerId, phaseData] of playersInPhaseMode.entries()) {
@@ -687,10 +578,10 @@ function disablePhaseMode() {
           disableSpeedometer(player);
         }
       } catch (e) {
-        world3.sendMessage(`\xA7cError exiting phase mode for player: ${e}`);
+        world2.sendMessage(`\xA7cError exiting phase mode for player: ${e}`);
       }
     }
-    for (const player of world3.getAllPlayers()) {
+    for (const player of world2.getAllPlayers()) {
       try {
         if (player && player.id && player.isValid?.()) {
           disableSpeedometer(player);
@@ -699,14 +590,17 @@ function disablePhaseMode() {
       }
     }
     playersInPhaseMode.clear();
-    world3.sendMessage("\xA7cPhantom Phase system disabled");
+    world2.sendMessage("\xA7cPhantom Phase system disabled");
   } catch (e) {
-    world3.sendMessage(`\xA7cError disabling Phantom Phase system: ${e}`);
+    world2.sendMessage(`\xA7cError disabling Phantom Phase system: ${e}`);
   }
 }
 
+// scripts/phase-head-detector.ts
+import { world as world4, system as system4, EquipmentSlot as EquipmentSlot2 } from "@minecraft/server";
+
 // scripts/void-totem.ts
-import { world as world4, system as system4, Player as Player4, EntityDamageCause, EquipmentSlot } from "@minecraft/server";
+import { world as world3, system as system3, Player as Player3, EntityDamageCause, EquipmentSlot } from "@minecraft/server";
 
 // node_modules/@minecraft/vanilla-data/lib/index.js
 var MinecraftBiomeTypes = ((MinecraftBiomeTypes2) => {
@@ -3799,7 +3693,7 @@ function teleportToSpawnPoint(player) {
     const spawnPoint = player.getSpawnPoint();
     if (!spawnPoint) {
       try {
-        const overworld = world4.getDimension(MinecraftDimensionTypes.Overworld);
+        const overworld = world3.getDimension(MinecraftDimensionTypes.Overworld);
         const worldSpawn = { x: 0, y: 70, z: 0 };
         player.teleport(worldSpawn, {
           dimension: overworld,
@@ -3808,12 +3702,12 @@ function teleportToSpawnPoint(player) {
         return true;
       } catch (e) {
         if (config3.debugMessages) {
-          world4.sendMessage(`\xA7c${player.name} has no spawn point set, cannot rescue from void!`);
+          world3.sendMessage(`\xA7c${player.name} has no spawn point set, cannot rescue from void!`);
         }
         return false;
       }
     }
-    const spawnDimension = world4.getDimension("overworld");
+    const spawnDimension = world3.getDimension("overworld");
     const spawnLocation = {
       x: spawnPoint.x + 0.5,
       y: spawnPoint.y + 0.5,
@@ -3833,7 +3727,7 @@ function teleportToSpawnPoint(player) {
 function handleEntityDamage(event) {
   if (!config3.enabled) return;
   try {
-    if (!event.hurtEntity?.id || !(event.hurtEntity instanceof Player4)) {
+    if (!event.hurtEntity?.id || !(event.hurtEntity instanceof Player3)) {
       return;
     }
     const player = event.hurtEntity;
@@ -3841,7 +3735,7 @@ function handleEntityDamage(event) {
     if (damageSource.cause !== EntityDamageCause.void) {
       return;
     }
-    const currentTick = system4.currentTick;
+    const currentTick = system3.currentTick;
     if (playerRescueCooldowns.has(player.id)) {
       const cooldownEndTick = playerRescueCooldowns.get(player.id);
       if (currentTick < cooldownEndTick) {
@@ -3856,7 +3750,7 @@ function handleEntityDamage(event) {
       event.cancel = true;
       const teleported = teleportToSpawnPoint(player);
       if (teleported) {
-        world4.sendMessage(`\xA7b${player.name} was rescued from the void by their Phantom Phase helmet!`);
+        world3.sendMessage(`\xA7b${player.name} was rescued from the void by their Phantom Phase helmet!`);
         if (config3.consumeHelmet) {
           consumePhaseHead(player);
           player.sendMessage(`\xA76Your Phantom Phase helmet was consumed during the rescue!`);
@@ -3876,28 +3770,77 @@ function startVoidRescueSystem(headId, customConfig) {
   if (customConfig) {
     config3 = { ...config3, ...customConfig };
   }
-  world4.afterEvents.entityHurt.subscribe(handleEntityDamage);
+  world3.afterEvents.entityHurt.subscribe(handleEntityDamage);
   if (config3.debugMessages) {
-    world4.sendMessage("\xA7aVoid rescue system started - your Phase Helmet will save you from the void");
+    world3.sendMessage("\xA7aVoid rescue system started - your Phase Helmet will save you from the void");
   }
 }
 function stopVoidRescueSystem() {
   playerRescueCooldowns.clear();
   if (config3.debugMessages) {
-    world4.sendMessage("\xA7cVoid rescue system stopped");
+    world3.sendMessage("\xA7cVoid rescue system stopped");
   }
 }
 
-// scripts/main.ts
-var ticksSinceLoad = 0;
+// scripts/phase-head-detector.ts
 var phantomPhaseActive = false;
 var helmetCheckInterval;
 var PHASE_HEAD = {
   id: "phantom-phase:phase_head",
-  // The special helmet that activates phase mode
   checkInterval: 20
-  // Check helmets every 20 ticks (1 second)
 };
+function startHeadDetection() {
+  if (helmetCheckInterval !== void 0) {
+    system4.clearRun(helmetCheckInterval);
+  }
+  helmetCheckInterval = system4.runInterval(() => {
+    checkAllPlayersHeads();
+  }, PHASE_HEAD.checkInterval);
+  world4.sendMessage("\xA76Head detection activated - wear a o activate phantom phase!");
+}
+function checkAllPlayersHeads() {
+  let anyPlayerWearingHead = false;
+  for (const player of world4.getAllPlayers()) {
+    try {
+      if (isPlayerWearingPhaseHead(player)) {
+        anyPlayerWearingHead = true;
+        break;
+      }
+    } catch (e) {
+      console.warn(`Error checking helmet for player ${player.name}: ${e}`);
+    }
+  }
+  if (anyPlayerWearingHead && !phantomPhaseActive) {
+    enablePhaseMode();
+    startVoidRescueSystem(PHASE_HEAD.id, {
+      consumeHelmet: true,
+      absorptionAmount: 4,
+      absorptionDuration: 30,
+      debugMessages: true
+    });
+    phantomPhaseActive = true;
+    world4.sendMessage("\xA7aPhantom Phase activated - special helmet detected!");
+  } else if (!anyPlayerWearingHead && phantomPhaseActive) {
+    disablePhaseMode();
+    stopVoidRescueSystem();
+    phantomPhaseActive = false;
+    world4.sendMessage("\xA7cPhantom Phase deactivated - no special helmets detected");
+  }
+}
+function isPlayerWearingPhaseHead(player) {
+  try {
+    const helmet = player.getComponent("minecraft:equippable")?.getEquipment(EquipmentSlot2.Head);
+    if (helmet && helmet.typeId === PHASE_HEAD.id) {
+      return true;
+    }
+  } catch (e) {
+    console.warn(`Error checking helmet: ${e}`);
+  }
+  return false;
+}
+
+// scripts/main.ts
+var ticksSinceLoad = 0;
 function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 60) {
@@ -3917,54 +3860,5 @@ function mainTick() {
   system5.run(mainTick);
 }
 system5.run(mainTick);
-function startHeadDetection() {
-  if (helmetCheckInterval !== void 0) {
-    system5.clearRun(helmetCheckInterval);
-  }
-  helmetCheckInterval = system5.runInterval(() => {
-    checkAllPlayersHeads();
-  }, PHASE_HEAD.checkInterval);
-  world5.sendMessage("\xA76Head detection activated - wear a o activate phantom phase!");
-}
-function checkAllPlayersHeads() {
-  let anyPlayerWearingHead = false;
-  for (const player of world5.getAllPlayers()) {
-    try {
-      if (isPlayerWearingPhaseHead(player)) {
-        anyPlayerWearingHead = true;
-        break;
-      }
-    } catch (e) {
-      console.warn(`Error checking helmet for player ${player.name}: ${e}`);
-    }
-  }
-  if (anyPlayerWearingHead && !phantomPhaseActive) {
-    enablePhaseMode();
-    startVoidRescueSystem(PHASE_HEAD.id, {
-      consumeHelmet: true,
-      absorptionAmount: 4,
-      absorptionDuration: 30,
-      debugMessages: true
-    });
-    phantomPhaseActive = true;
-    world5.sendMessage("\xA7aPhantom Phase activated - special helmet detected!");
-  } else if (!anyPlayerWearingHead && phantomPhaseActive) {
-    disablePhaseMode();
-    stopVoidRescueSystem();
-    phantomPhaseActive = false;
-    world5.sendMessage("\xA7cPhantom Phase deactivated - no special helmets detected");
-  }
-}
-function isPlayerWearingPhaseHead(player) {
-  try {
-    const helmet = player.getComponent("minecraft:equippable")?.getEquipment(EquipmentSlot2.Head);
-    if (helmet && helmet.typeId === PHASE_HEAD.id) {
-      return true;
-    }
-  } catch (e) {
-    console.warn(`Error checking helmet: ${e}`);
-  }
-  return false;
-}
 
 //# sourceMappingURL=../debug/main.js.map

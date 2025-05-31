@@ -1,12 +1,6 @@
 // filepath: d:\Repositories\Minecraft\phantom-phase\scripts\phase-mode.ts
 import { world, system, GameMode, Player, Vector3 } from "@minecraft/server";
 import { enableSpeedometer, disableSpeedometer } from "./phase-mode-speedometer";
-import {
-  makePlayerInvulnerable,
-  removePlayerInvulnerability,
-  isPlayerInvulnerable,
-  setInvulnerabilityDebug,
-} from "./phase-mode-invulnerability";
 
 // Configuration interface for phantom phase system
 interface PhaseConfig {
@@ -76,9 +70,8 @@ function calculatePlayerSpeed(
 }
 
 /**
- * Switches player to spectator mode (or invulnerable mode) and adds them to phase mode tracking
- * If there's a block ahead or alwaysUseSpectator is true: enters spectator mode
- * Otherwise: keeps current game mode but makes player invulnerable
+ * Switches player to spectator mode and adds them to phase mode tracking
+ * If there's a block ahead is true: enters spectator mode
  */
 function enterPhaseMode(player: Player): void {
   // Prevent redundant mode changes if already in spectator
@@ -126,10 +119,6 @@ function enterPhaseMode(player: Player): void {
             player.setGameMode(GameMode.spectator);
             world.sendMessage(`§b${player.name} is phasing out of reality! (from ${previousMode} mode)`);
           }
-        } else {
-          // Make player invulnerable but keep their current game mode
-          makePlayerInvulnerable(player);
-          world.sendMessage(`§d${player.name} is phasing (staying in ${previousMode} mode with invulnerability)`);
         }
       } catch (err) {
         world.sendMessage(`§cERROR: Failed to set phase mode: ${err}`);
@@ -179,11 +168,6 @@ function exitPhaseMode(player: Player, preserveVelocity = true): void {
 
         // Check current game mode and switch if appropriate
         const currentMode = player.getGameMode();
-
-        // Remove any invulnerability
-        if (isPlayerInvulnerable(player.id)) {
-          removePlayerInvulnerability(player);
-        }
 
         if (currentMode === GameMode.spectator) {
           // Explicitly force target mode
@@ -565,10 +549,6 @@ export function updatePhaseConfig(newConfig: Partial<PhaseConfig>): void {
     ...config,
     ...newConfig,
   };
-
-  // Sync invulnerability debug setting
-  setInvulnerabilityDebug(config.debugMessages);
-
   // Update speedometers for all players when config changes
   updateAllSpeedometers();
   if (config.debugMessages) {
@@ -607,9 +587,6 @@ export function initializePhaseMode(customConfig?: Partial<PhaseConfig>) {
         config.alwaysUseSpectator ? "Always spectator" : "Spectator only for blocks"
       })`
     );
-
-    // Set debug mode for the invulnerability system
-    setInvulnerabilityDebug(config.debugMessages);
 
     // Clear any existing players in phase mode
     playersInPhaseMode.clear();
