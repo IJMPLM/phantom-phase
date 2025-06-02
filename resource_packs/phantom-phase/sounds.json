@@ -1,6 +1,16 @@
 {
   "entity_sounds": {
     "entities": {
+      "phantom-phase:phase": {
+        "events": {
+          "ambient": "mob.blaze.breathe",
+          "death": "mob.blaze.death",
+          "hurt": "mob.blaze.hit",
+          "shoot": "mob.blaze.shoot"
+        },
+        "pitch": [0.8, 1.2],
+        "volume": 1
+      },
       "aop_mobs:nardolphle": {
         "events": {
           "ambient": "mob.dolphin.idle",

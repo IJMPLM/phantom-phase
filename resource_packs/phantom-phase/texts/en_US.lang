@@ -1,3 +1,5 @@
 item.demo:crown=Fancy Crown
 item.demo:goo=Weird Goo
 item.phantom-phase:phase_head=Phase Head
+entity.phantom-phase:phase.name=Phase
+item.spawn_egg.entity.phantom-phase:phase.name=Spawn Phase
