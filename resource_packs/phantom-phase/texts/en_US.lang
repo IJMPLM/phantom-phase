@@ -3,3 +3,5 @@ item.demo:goo=Weird Goo
 item.phantom-phase:phase_head=Phase Head
 entity.phantom-phase:phase.name=Phase
 item.spawn_egg.entity.phantom-phase:phase.name=Spawn Phase
+entity.phantom-phase:empowered_phantom.name=Empowered Phantom
+item.spawn_egg.entity.phantom-phase:empowered_phantom.name=Spawn Empowered Phantom

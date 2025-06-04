@@ -1,0 +1,14 @@
+{
+  "format_version": "1.21.70",
+  "minecraft:spawn_rules": {
+    "description": {
+      "identifier": "custom:empowered_phantom",
+      "population_control": "monster"
+    },
+    "conditions": {
+      "minecraft:spawns_when": {
+        "event": "phantoms_no_sight"
+      }
+    }
+  }
+}

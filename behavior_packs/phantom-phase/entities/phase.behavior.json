@@ -73,14 +73,14 @@
       "minecraft:behavior.hurt_by_target": {
         "priority": 1
       },
-      "minecraft:behavior.nearest_attackable_target": {},
       "minecraft:behavior.random_stroll": {},
       "minecraft:behavior.random_look_around": {},
       "minecraft:type_family": {
         "family": ["vex", "mob"]
       },
       "minecraft:physics": {
-        "has_gravity": false
+        "has_gravity": false,
+        "has_collision": false
       },
       "minecraft:pushable": {
         "is_pushable": true

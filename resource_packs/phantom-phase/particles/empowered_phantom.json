@@ -1,0 +1,11 @@
+{
+  "format_version": "1.8.0",
+  "minecraft:particle_effect": {
+    "description": { "identifier": "custom:empowered_phantom" },
+    "components": {
+      "minecraft:emitter_lifetime_expression": "variable.life_time",
+      "minecraft:appearance_billboard": { "size": [1, 1] },
+      "minecraft:motion_dynamic": { "speed": 0.1 }
+    }
+  }
+}
