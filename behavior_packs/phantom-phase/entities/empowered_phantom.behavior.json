@@ -36,6 +36,10 @@
           }
         ]
       },
+      "minecraft:on_hurt_by_player": {
+        "target": "self",
+        "event": "delayed_harm"
+      },
       "minecraft:physics": {
         "has_gravity": false
       },
@@ -130,6 +134,21 @@
         "radius_range": [5, 15],
         "height_offset_range": [-4, 5],
         "height_above_target_range": [20, 40]
+      }
+    },
+    "events": {
+      "delayed_harm": {
+        "sequence": [
+          {
+            "queue_command": {
+              "command": [
+                "say Event triggered: Empowered Phantom took damage!",
+                "execute as @s at @s run summon splash_potion ~ ~1.5 ~",
+                "execute as @s at @s run effect @e[r=2.5,rm=0.1,type=!item,type=!xp_orb,type=!armor_stand] instant_damage 1 1"
+              ]
+            }
+          }
+        ]
       }
     }
   }

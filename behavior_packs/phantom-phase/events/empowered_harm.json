@@ -1,9 +1,0 @@
-{
-  "minecraft:event": {
-    "description": { "identifier": "custom:empowered_harm" },
-    "spawn_area_effect_cloud": {
-      "effect": "minecraft:harming",
-      "radius": 2
-    }
-  }
-}
