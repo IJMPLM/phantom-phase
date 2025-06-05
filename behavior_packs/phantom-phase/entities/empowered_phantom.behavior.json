@@ -5,7 +5,31 @@
       "identifier": "phantom-phase:empowered_phantom",
       "is_spawnable": true,
       "is_summonable": true,
-      "is_experimental": false
+      "is_experimental": false,
+      "animations": {
+        "spawn_particles": "animation.empowered_phantom.spawn_particles",
+        "stop_particles": "animation.empowered_phantom.stop_particles",
+        "particles_controller": "controller.animation.empowered_phantom.particles"
+      },
+      "scripts": {
+        "animate": ["particles_controller"]
+      }
+    },
+    "component_groups": {
+      "unpopped": {
+        "minecraft:on_hurt_by_player": {
+          "target": "self",
+          "event": "delayed_harm"
+        },
+        "minecraft:variant": {
+          "value": 0
+        }
+      },
+      "popped_state": {
+        "minecraft:variant": {
+          "value": 1
+        }
+      }
     },
     "components": {
       "minecraft:experience_reward": {
@@ -35,10 +59,6 @@
             "damage_per_tick": 4
           }
         ]
-      },
-      "minecraft:on_hurt_by_player": {
-        "target": "self",
-        "event": "delayed_harm"
       },
       "minecraft:physics": {
         "has_gravity": false
@@ -137,15 +157,40 @@
       }
     },
     "events": {
+      "minecraft:entity_spawned": {
+        "add": {
+          "component_groups": ["unpopped"]
+        }
+      },
+      "popped": {
+        "remove": {
+          "component_groups": ["unpopped"]
+        },
+        "add": {
+          "component_groups": ["popped_state"]
+        }
+      },
       "delayed_harm": {
         "sequence": [
           {
             "queue_command": {
               "command": [
                 "say Event triggered: Empowered Phantom took damage!",
-                "execute as @s at @s run summon splash_potion ~ ~1.5 ~",
-                "execute as @s at @s run effect @e[r=2.5,rm=0.1,type=!item,type=!xp_orb,type=!armor_stand] instant_damage 1 1"
+                "execute as @s at @s run particle phantom-phase:delayed_harm ~ ~ ~",
+                "execute as @s at @s run effect @e[r=7,rm=0.1,type=!item,type=!xp_orb,type=!armor_stand] instant_damage 1 0"
               ]
+            }
+          },
+          {
+            "trigger": "popped"
+          }
+        ]
+      },
+      "stop_particles_event": {
+        "sequence": [
+          {
+            "queue_command": {
+              "command": ["say Transitioning to stop_particles"]
             }
           }
         ]

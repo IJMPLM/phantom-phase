@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.empowered_phantom.particles": {
+      "initial_state": "check_state",
+      "states": {
+        "check_state": {
+          "transitions": [{ "show_particles": "query.variant == 0" }, { "stop_particles": "query.variant == 1" }]
+        },
+        "show_particles": {
+          "animations": ["spawn_particles"],
+          "transitions": [{ "stop_particles": "query.variant == 1" }]
+        },
+        "stop_particles": {
+          "on_entry": ["@s stop_particles_event"]
+        }
+      }
+    }
+  }
+}

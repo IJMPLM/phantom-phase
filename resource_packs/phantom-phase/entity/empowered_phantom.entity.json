@@ -23,7 +23,8 @@
         "move": "animation.empowered_phantom.move"
       },
       "particle_effects": {
-        "wing_dust": "minecraft:phantom_trail_particle"
+        "wing_dust": "minecraft:phantom_trail_particle",
+        "empowered_phantom_unpopped": "phantom-phase:empowered_phantom_unpopped"
       },
       "sound_effects": {
         "flap": "mob.phantom.flap"
