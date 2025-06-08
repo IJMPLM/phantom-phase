@@ -1,5 +1,5 @@
 // scripts/main.ts
-import { world as world6, system as system6 } from "@minecraft/server";
+import { world as world8, system as system8 } from "@minecraft/server";
 
 // scripts/phase-mode.ts
 import { world as world3, system as system3, GameMode as GameMode2 } from "@minecraft/server";
@@ -3955,12 +3955,192 @@ function isPlayerWearingPhaseHead(player) {
   return false;
 }
 
+// scripts/path-pushing.ts
+import { system as system6, world as world6 } from "@minecraft/server";
+var defaultConfig = {
+  updateIntervalTicks: 5,
+  forceMultiplier: 0.5,
+  targetEntityTag: "raid_target",
+  debugMessages: false
+};
+var intervalId;
+var currentConfig = { ...defaultConfig };
+function updatePathPushing() {
+  const players = world6.getPlayers();
+  const overworld = world6.getDimension("overworld");
+  for (const player of players) {
+    const playerPos = player.location;
+    const taggedEntities = { tags: [currentConfig.targetEntityTag] };
+    for (const entity of overworld.getEntities(taggedEntities)) {
+      const entityPos = entity.location;
+      const direction = {
+        x: playerPos.x - entityPos.x,
+        y: playerPos.y - entityPos.y,
+        z: playerPos.z - entityPos.z
+      };
+      const length = Math.sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+      if (length > 0) {
+        direction.x = direction.x / length * currentConfig.forceMultiplier;
+        direction.y = direction.y / length * currentConfig.forceMultiplier;
+        direction.z = direction.z / length * currentConfig.forceMultiplier;
+      }
+      entity.applyImpulse(direction);
+    }
+  }
+  if (currentConfig.debugMessages) {
+    console.warn(`Path pushing updated for ${players.length} players`);
+  }
+}
+function startPathPushing(config6 = {}) {
+  stopPathPushing();
+  currentConfig = {
+    ...defaultConfig,
+    ...config6
+  };
+  intervalId = system6.runInterval(updatePathPushing, currentConfig.updateIntervalTicks);
+  if (currentConfig.debugMessages) {
+    console.warn("Path pushing system started");
+  }
+}
+function stopPathPushing() {
+  if (intervalId !== void 0) {
+    system6.clearRun(intervalId);
+    intervalId = void 0;
+    if (currentConfig.debugMessages) {
+      console.warn("Path pushing system stopped");
+    }
+  }
+}
+
+// scripts/phase-spawner.ts
+import { system as system7, world as world7 } from "@minecraft/server";
+var config5 = {
+  debugMode: true,
+  minDaysWithoutSleep: 3,
+  minYLevel: 64,
+  blockedSpawnsBeforeCreeper: 3,
+  checkIntervalTicks: 1200,
+  // 1 minute (60 seconds × 20 ticks/second)
+  nightStartTicks: 13e3,
+  nightEndTicks: 23e3
+};
+var phantomSpawnCounter = /* @__PURE__ */ new Map();
+var lastSpawnAttemptTime = /* @__PURE__ */ new Map();
+function calculatePhantomSpawnChance(daysWithoutSleep) {
+  if (daysWithoutSleep < config5.minDaysWithoutSleep) return 0;
+  if (daysWithoutSleep === config5.minDaysWithoutSleep) return 0;
+  if (daysWithoutSleep === config5.minDaysWithoutSleep + 1) return 25;
+  if (daysWithoutSleep === config5.minDaysWithoutSleep + 2) return 37.5;
+  return 50;
+}
+function isNightTime() {
+  const currentTime = system7.currentTick % 24e3;
+  return currentTime > config5.nightStartTicks && currentTime < config5.nightEndTicks;
+}
+function isTimeToSpawnAttempt(playerId) {
+  const currentTime = system7.currentTick;
+  const lastAttempt = lastSpawnAttemptTime.get(playerId) || 0;
+  const randomInterval = Math.floor(Math.random() * 1200) + 1200;
+  if (currentTime - lastAttempt >= randomInterval) {
+    lastSpawnAttemptTime.set(playerId, currentTime);
+    return true;
+  }
+  return false;
+}
+function startPhantomSpawner(customConfig) {
+  if (customConfig) {
+    Object.assign(config5, customConfig);
+  }
+  const intervalId2 = system7.runInterval(() => {
+    const players = world7.getPlayers();
+    for (const player of players) {
+      const playerId = player.id;
+      const hasInsomnia = player.hasTag("insomnia");
+      const daysWithoutSleep = hasInsomnia ? 4 : 0;
+      if (!hasInsomnia) {
+        if (config5.debugMode && phantomSpawnCounter.has(playerId)) {
+          player.sendMessage("\xA77No insomnia effect detected.");
+        }
+        phantomSpawnCounter.delete(playerId);
+        lastSpawnAttemptTime.delete(playerId);
+        continue;
+      }
+      if (config5.debugMode) {
+        player.sendMessage(`\xA73Insomnia: ${daysWithoutSleep} days without sleep`);
+      }
+      if (daysWithoutSleep < config5.minDaysWithoutSleep) {
+        const counter = phantomSpawnCounter.get(playerId) || 0;
+        if (counter > 0) {
+          player.sendMessage("\xA7b\u{1F4A4} Insomnia reset! Phantom counter cleared.");
+          phantomSpawnCounter.set(playerId, 0);
+        }
+        continue;
+      }
+      if (isNightTime() && isTimeToSpawnAttempt(playerId)) {
+        const spawnChance = calculatePhantomSpawnChance(daysWithoutSleep);
+        const roll = Math.random() * 100;
+        const successfulRoll = roll <= spawnChance;
+        const playerLocation = player.location;
+        if (!playerLocation) continue;
+        const aboveSeaLevel = playerLocation.y >= config5.minYLevel;
+        let hasSkyAccess = true;
+        try {
+          for (let y = 1; y <= 20; y++) {
+            const blockAbove = player.dimension.getBlock({
+              x: Math.floor(playerLocation.x),
+              y: Math.floor(playerLocation.y) + y,
+              z: Math.floor(playerLocation.z)
+            });
+            if (blockAbove && blockAbove.typeId !== "minecraft:air" && blockAbove.typeId !== "minecraft:void_air" && blockAbove.typeId !== "minecraft:cave_air") {
+              hasSkyAccess = false;
+              break;
+            }
+          }
+        } catch (error) {
+          hasSkyAccess = true;
+        }
+        if (config5.debugMode) {
+          player.sendMessage(
+            `\xA77Phantom Spawn Attempt: ${successfulRoll ? "\xA7aSuccess" : "\xA7cFail"} (${roll.toFixed(
+              1
+            )}/${spawnChance.toFixed(1)}%)`
+          );
+          player.sendMessage(
+            `\xA77Conditions: Above Sea Level: ${aboveSeaLevel ? "\xA7a\u2713" : "\xA7c\u2717"}, Sky Access: ${hasSkyAccess ? "\xA7a\u2713" : "\xA7c\u2717"}`
+          );
+        }
+        if (successfulRoll && aboveSeaLevel && !hasSkyAccess) {
+          const currentCount = phantomSpawnCounter.get(playerId) || 0;
+          const newCount = currentCount + 1;
+          phantomSpawnCounter.set(playerId, newCount);
+          player.sendMessage(`\xA7e\u26A0 Phantom spawn blocked! Counter: ${newCount}/${config5.blockedSpawnsBeforeCreeper}`);
+          if (newCount >= config5.blockedSpawnsBeforeCreeper) {
+            const creeperPos = { x: player.location.x, y: 256, z: player.location.z };
+            player.dimension.spawnEntity("minecraft:creeper", creeperPos);
+            player.sendMessage("\xA7c\u{1F4A5} Creeper spawned above due to failed phantom spawns!");
+            phantomSpawnCounter.set(playerId, 0);
+          }
+        } else if (successfulRoll && aboveSeaLevel && hasSkyAccess) {
+          if (config5.debugMode) {
+            player.sendMessage("\xA77A phantom would have spawned here (all conditions met)");
+          }
+          phantomSpawnCounter.set(playerId, 0);
+        }
+      }
+    }
+  }, 200);
+  if (config5.debugMode) {
+    world7.sendMessage("\xA76Phantom Spawner system started");
+  }
+  return intervalId2;
+}
+
 // scripts/main.ts
 var ticksSinceLoad = 0;
 function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 60) {
-    world6.sendMessage("\xA76Phantom Phase system initialized...");
+    world8.sendMessage("\xA76Phantom Phase system initialized...");
     updatePhaseConfig({
       speedThresholdBps: 25,
       exitSpeedThresholdBps: 7,
@@ -3989,9 +4169,23 @@ function mainTick() {
       debugMessages: true
     });
     startHeadDetection();
+    startPathPushing({
+      updateIntervalTicks: 5,
+      forceMultiplier: 0.5,
+      targetEntityTag: "raid_target",
+      debugMessages: true
+    });
+    startPhantomSpawner({
+      debugMode: true,
+      minDaysWithoutSleep: 3,
+      minYLevel: 64,
+      blockedSpawnsBeforeCreeper: 3,
+      checkIntervalTicks: 1200
+      // 1 minute
+    });
   }
-  system6.run(mainTick);
+  system8.run(mainTick);
 }
-system6.run(mainTick);
+system8.run(mainTick);
 
 //# sourceMappingURL=../debug/main.js.map

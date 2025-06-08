@@ -1,0 +1,293 @@
+{
+  "format_version": "1.16.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "phantom-phase:phase",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "minecraft:exploding": {
+        "minecraft:explode": {
+          "fuse_length": 1,
+          "fuse_lit": true,
+          "power": 9,
+          "damage_scaling": 0,
+          "causes_fire": false,
+          "destroy_affected_by_griefing": true
+        }
+      },
+      "minecraft:charged_creeper": {
+        "minecraft:is_charged": {}
+      },
+      "minecraft:charged_exploding": {
+        "minecraft:explode": {
+          "fuse_length": 1.5,
+          "fuse_lit": true,
+          "power": 12,
+          "causes_fire": false,
+          "destroy_affected_by_griefing": true
+        }
+      },
+      "minecraft:forced_exploding": {
+        "minecraft:target_nearby_sensor": {},
+        "minecraft:explode": {
+          "fuse_length": 1.5,
+          "fuse_lit": true,
+          "power": 3,
+          "causes_fire": false,
+          "destroy_affected_by_griefing": true
+        },
+        "minecraft:on_target_escape": {}
+      },
+      "minecraft:forced_charged_exploding": {
+        "minecraft:target_nearby_sensor": {},
+        "minecraft:explode": {
+          "fuse_length": 1.5,
+          "fuse_lit": true,
+          "power": 6,
+          "causes_fire": false,
+          "destroy_affected_by_griefing": true
+        },
+        "minecraft:on_target_escape": {}
+      },
+      "phantom-phase:spawn_empowered_phantom": {
+        "minecraft:spawn_entity": {
+          "entities": [
+            {
+              "min_wait_time": 1,
+              "max_wait_time": 1,
+              "spawn_entity": "phantom-phase:empowered_phantom",
+              "spawn_event": "minecraft:entity_spawned",
+              "single_use": true,
+              "num_to_spawn": 3
+            }
+          ]
+        }
+      }
+    },
+
+    "components": {
+      "minecraft:is_hidden_when_invisible": {},
+      "minecraft:experience_reward": {
+        "on_death": "query.last_hit_by_player ? 5 : 0"
+      },
+      "minecraft:type_family": {
+        "family": ["creeper", "monster", "mob"]
+      },
+      "minecraft:nameable": {},
+      "minecraft:collision_box": {
+        "width": 0.0,
+        "height": 0.0
+      },
+      "minecraft:movement": {
+        "value": 1
+      },
+      "minecraft:navigation.float": {
+        "can_path_over_water": true,
+        "can_path_from_air": true,
+        "can_pass_doors": true
+      },
+      "minecraft:movement.fly": {},
+      "minecraft:loot": {
+        "table": "loot_tables/entities/creeper.json"
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:attack": {
+        "damage": 3
+      },
+      "minecraft:damage_sensor": {
+        "triggers": [
+          {
+            "on_damage": {
+              "filters": {
+                "any_of": [{ "test": "is_family", "subject": "other", "value": "lightning" }]
+              },
+              "event": "minecraft:become_charged"
+            },
+            "deals_damage": "no"
+          }
+        ]
+      },
+      "minecraft:fire_immune": {},
+      "minecraft:breathable": {
+        "breathes_solids": true,
+        "breathes_water": true,
+        "breathes_lava": true,
+        "breathes_air": true,
+        "generates_bubbles": false,
+        "total_supply": 15,
+        "suffocate_time": 0
+      },
+      "minecraft:target_nearby_sensor": {
+        "inside_range": 12.0,
+        "outside_range": 18.0,
+        "must_see": false,
+        "on_inside_range": {
+          "event": "minecraft:start_exploding",
+          "target": "self"
+        },
+        "on_outside_range": {
+          "event": "minecraft:stop_exploding",
+          "target": "self"
+        },
+        "on_vision_lost_inside_range": {
+          "event": "minecraft:stop_exploding",
+          "target": "self"
+        }
+      },
+      "minecraft:interact": {
+        "interactions": {
+          "on_interact": {
+            "filters": {
+              "all_of": [
+                { "test": "is_family", "subject": "other", "value": "player" },
+                { "test": "has_equipment", "domain": "hand", "subject": "other", "value": "flint_and_steel" },
+                { "test": "has_component", "operator": "!=", "value": "minecraft:explode" }
+              ]
+            },
+            "event": "minecraft:start_exploding_forced",
+            "target": "self"
+          },
+          "hurt_item": 1,
+          "swing": true,
+          "play_sounds": "ignite",
+          "interact_text": "action.interact.creeper"
+        }
+      },
+      "minecraft:despawn": {
+        "despawn_from_distance": {}
+      },
+      "minecraft:behavior.swell": {
+        "start_distance": 2.5,
+        "stop_distance": 6.0,
+        "priority": 2
+      },
+      "minecraft:behavior.melee_attack": {
+        "priority": 4,
+        "speed_multiplier": 1.25,
+        "track_target": false,
+        "reach_multiplier": 0.0
+      },
+      "minecraft:behavior.look_at_player": {
+        "priority": 6,
+        "look_distance": 8
+      },
+      "minecraft:behavior.random_look_around": {
+        "priority": 6
+      },
+      "minecraft:behavior.nearest_attackable_target": {
+        "priority": 1,
+        "must_see": false,
+        "entity_types": [
+          {
+            "filters": {
+              "test": "is_family",
+              "subject": "other",
+              "value": "player"
+            },
+            "max_dist": 1028
+          }
+        ]
+      },
+      "minecraft:behavior.hurt_by_target": {
+        "priority": 2
+      },
+      "minecraft:physics": {
+        "has_collision": false,
+        "has_gravity": false
+      },
+      "minecraft:pushable": {
+        "is_pushable": false,
+        "is_pushable_by_piston": false
+      },
+      "minecraft:on_target_escape": {
+        "event": "minecraft:stop_exploding",
+        "target": "self"
+      },
+      "minecraft:conditional_bandwidth_optimization": {},
+      "minecraft:on_death": {
+        "event": "minecraft:start_death",
+        "target": "self"
+      }
+    },
+
+    "events": {
+      "minecraft:start_exploding_forced": {
+        "sequence": [
+          {
+            "filters": {
+              "test": "has_component",
+              "operator": "!=",
+              "value": "minecraft:is_charged"
+            },
+            "add": {
+              "component_groups": ["minecraft:forced_exploding"]
+            }
+          },
+          {
+            "filters": {
+              "test": "has_component",
+              "value": "minecraft:is_charged"
+            },
+            "add": {
+              "component_groups": ["minecraft:forced_charged_exploding"]
+            }
+          }
+        ]
+      },
+      "minecraft:start_exploding": {
+        "sequence": [
+          {
+            "filters": {
+              "test": "has_component",
+              "operator": "!=",
+              "value": "minecraft:is_charged"
+            },
+            "add": {
+              "component_groups": ["minecraft:exploding"]
+            }
+          },
+          {
+            "filters": {
+              "test": "has_component",
+              "value": "minecraft:is_charged"
+            },
+            "add": {
+              "component_groups": ["minecraft:charged_exploding"]
+            }
+          },
+          {
+            "add": {
+              "component_groups": ["phantom-phase:spawn_empowered_phantom"]
+            },
+            "queue_command": { "command": "say spawning empowered phantoms!" }
+          }
+        ]
+      },
+      "minecraft:stop_exploding": {
+        "remove": {
+          "component_groups": ["minecraft:exploding"]
+        }
+      },
+      "minecraft:become_charged": {
+        "remove": {
+          "component_groups": ["minecraft:exploding"]
+        },
+        "add": {
+          "component_groups": ["minecraft:charged_creeper"]
+        }
+      },
+      "minecraft:start_death": {
+        "add": {
+          "component_groups": ["phantom-phase:spawn_empowered_phantom"]
+        },
+        "queue_command": { "command": "say spawning empowered phantoms!" }
+      }
+    }
+  }
+}

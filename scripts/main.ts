@@ -1,6 +1,8 @@
 import { world, system } from "@minecraft/server";
 import { updatePhaseConfig, updatePhaseEndConfig } from "./phase-mode";
 import { startHeadDetection } from "./phase-head-detector";
+import { startPathPushing } from "./path-pushing";
+import { startPhantomSpawner } from "./phase-spawner";
 
 let ticksSinceLoad = 0;
 
@@ -31,8 +33,22 @@ function mainTick() {
       fireResistanceDuration: 10, // 10 seconds of fire resistance
       debugMessages: true,
     });
+    startHeadDetection(); // Start path pushing system with configuration
+    startPathPushing({
+      updateIntervalTicks: 5,
+      forceMultiplier: 0.5,
+      targetEntityTag: "raid_target",
+      debugMessages: true,
+    });
 
-    startHeadDetection();
+    // Start phantom spawner system
+    startPhantomSpawner({
+      debugMode: true,
+      minDaysWithoutSleep: 3,
+      minYLevel: 64,
+      blockedSpawnsBeforeCreeper: 3,
+      checkIntervalTicks: 1200, // 1 minute
+    });
   }
   system.run(mainTick);
 }
