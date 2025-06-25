@@ -49,7 +49,7 @@ function mainTick() {
     startPhantomSpawner({
       debugMode: true,
       minYLevel: 64,
-      rollTicks: 20,
+      rollTicks: 2000,
       testingMode: true,
     });
   }

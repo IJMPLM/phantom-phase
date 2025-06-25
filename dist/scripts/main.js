@@ -4034,13 +4034,32 @@ import { system as system7, world as world7 } from "@minecraft/server";
 var config5 = {
   debugMode: true,
   minYLevel: 64,
-  rollTicks: 20,
+  rollTicks: 2e3,
   //
   nightStartTicks: 13e3,
   testingMode: true
   // Enable testing mode by default for easier debugging
 };
 var playerDataMap = /* @__PURE__ */ new Map();
+var phaseRollIntervalId;
+function hasSkyAccess(player) {
+  try {
+    const location = player.location;
+    for (let y = Math.floor(location.y) + 1; y <= 256; y++) {
+      const blockAbove = player.dimension.getBlock({
+        x: Math.floor(location.x),
+        y,
+        z: Math.floor(location.z)
+      });
+      if (blockAbove && !blockAbove.isAir) {
+        return false;
+      }
+    }
+    return true;
+  } catch (error) {
+    return true;
+  }
+}
 function getPlayerData(playerId) {
   if (!playerDataMap.has(playerId)) {
     playerDataMap.set(playerId, {
@@ -4093,7 +4112,7 @@ function performNightCheck() {
   for (const player of players) {
     const playerData = getPlayerData(player.id);
     if (playerData.daysSinceLastRest >= 4) {
-      spawnPhase(player);
+      eligiblePlayers.push(player);
     }
     playerData.lastNightChecked = currentNight;
   }
@@ -4105,12 +4124,79 @@ function performNightCheck() {
     if (config5.debugMode) {
       world7.sendMessage("\xA76Night check completed - players eligible for phase spawning");
     }
+    performPhaseSpawnRoll(eligiblePlayers);
   }
+}
+function performPhaseSpawnRoll(players) {
+  if (phaseRollIntervalId !== void 0) {
+    system7.clearRun(phaseRollIntervalId);
+  }
+  phaseRollIntervalId = system7.runInterval(() => {
+    const time = world7.getTimeOfDay();
+    if (time >= config5.nightStartTicks && time < 24e3) {
+      if (config5.debugMode) {
+        world7.sendMessage(`\xA77Calling phase roll since still night (time: ${time})`);
+      }
+      for (let i = players.length - 1; i >= 0; i--) {
+        const player = players[i];
+        const playerData = getPlayerData(player.id);
+        const maxSpawnsPerNight = Math.max(0, playerData.daysSinceLastRest - 3);
+        if (playerData.spawnsThisDay >= maxSpawnsPerNight) {
+          if (config5.debugMode) {
+            player.sendMessage(`\xA77Maximum phase spawns reached for tonight (${maxSpawnsPerNight})`);
+          }
+          players.splice(i, 1);
+          continue;
+        }
+        const belowMinY = player.location.y < config5.minYLevel;
+        const noSkyAccess = !hasSkyAccess(player);
+        if (belowMinY || noSkyAccess) {
+          if (config5.debugMode) {
+            player.sendMessage("\xA77Phase spawn roll happened");
+          }
+          const spawnChance = 0.25 * (playerData.daysSinceLastRest - 3);
+          const roll = Math.random();
+          const spawnSuccessful = roll <= spawnChance;
+          if (spawnSuccessful) {
+            try {
+              spawnPhase(player);
+              player.sendMessage("\xA7c\u26A1 Phase entity spawned 20 blocks above due to blocked phantom conditions!");
+              playerData.spawnsThisDay++;
+              player.addTag("phase_target");
+            } catch (error) {
+              if (config5.debugMode) {
+                player.sendMessage(`\xA7cError spawning phase entity: ${error}`);
+              }
+            }
+          } else {
+            if (config5.debugMode) {
+              player.sendMessage(
+                `\xA7c\u26A1 Phase roll failed, roll = ${(roll * 100).toFixed(1)}%, chance = ${(spawnChance * 100).toFixed(
+                  1
+                )}%`
+              );
+            }
+          }
+        }
+      }
+      if (players.length === 0) {
+        system7.clearRun(phaseRollIntervalId);
+        if (config5.debugMode) {
+          world7.sendMessage("\xA77No more eligible players, stopping phase roll");
+        }
+      }
+    } else {
+      system7.clearRun(phaseRollIntervalId);
+      if (config5.debugMode) {
+        world7.sendMessage(`\xA77Daytime detected (${time}), stopping phase roll`);
+      }
+    }
+  }, config5.rollTicks);
 }
 function spawnPhase(player) {
   const phasePos = {
     x: player.location.x,
-    y: player.location.y + 50,
+    y: player.location.y + 40,
     z: player.location.z
   };
   player.dimension.spawnEntity("phantom-phase:phase", phasePos);
@@ -4212,7 +4298,7 @@ function showCustomMenu(player) {
         }
         break;
       case 1:
-        let hasSkyAccess2 = function(player2) {
+        let hasSkyAccess3 = function(player2) {
           try {
             const location = player2.location;
             for (let y = Math.floor(location.y) + 1; y <= 256; y++) {
@@ -4230,9 +4316,9 @@ function showCustomMenu(player) {
             return true;
           }
         };
-        var hasSkyAccess = hasSkyAccess2;
+        var hasSkyAccess2 = hasSkyAccess3;
         const aboveMinY = player.location.y >= 64;
-        const skyAccessible = hasSkyAccess2(player);
+        const skyAccessible = hasSkyAccess3(player);
         if (aboveMinY) {
           player.sendMessage("\xA77Phantom spawns above MinY");
         } else {
@@ -4295,7 +4381,7 @@ function mainTick() {
     startPhantomSpawner({
       debugMode: true,
       minYLevel: 64,
-      rollTicks: 20,
+      rollTicks: 2e3,
       testingMode: true
     });
   }

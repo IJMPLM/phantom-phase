@@ -15,7 +15,7 @@ interface PhantomSpawnerConfig {
 const config: PhantomSpawnerConfig = {
   debugMode: true,
   minYLevel: 64,
-  rollTicks: 20, //
+  rollTicks: 2000, //
   nightStartTicks: 13000,
   testingMode: true, // Enable testing mode by default for easier debugging
 };
@@ -204,7 +204,7 @@ function performPhaseSpawnRoll(players: Player[]) {
           if (spawnSuccessful) {
             try {
               spawnPhase(player);
-              player.sendMessage("§c⚡ Phase entity spawned 50 blocks above due to blocked phantom conditions!");
+              player.sendMessage("§c⚡ Phase entity spawned 20 blocks above due to blocked phantom conditions!");
               playerData.spawnsThisDay++;
               player.addTag("phase_target");
             } catch (error) {
@@ -243,10 +243,10 @@ function performPhaseSpawnRoll(players: Player[]) {
 function spawnPhase(player: Player) {
   const phasePos = {
     x: player.location.x,
-    y: player.location.y + 50,
+    y: player.location.y + 40,
     z: player.location.z,
   };
-  player.dimension.spawnEntity("creeper", phasePos);
+  player.dimension.spawnEntity("phantom-phase:phase", phasePos);
 }
 
 /**
