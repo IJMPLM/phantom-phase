@@ -1,238 +1,311 @@
-import { system, world, EntityTypes } from "@minecraft/server";
+import { system, world, Player } from "@minecraft/server";
 
 /**
  * Configuration for phantom spawn monitoring
  */
 interface PhantomSpawnerConfig {
-  /**
-   * Debug mode, shows additional messages
-   */
   debugMode: boolean;
-
-  /**
-   * Minimum days without sleep for phantoms to spawn
-   */
-  minDaysWithoutSleep: number;
-
-  /**
-   * Minimum Y level for phantoms to spawn
-   */
   minYLevel: number;
-
-  /**
-   * Blockages required before spawning a creeper
-   */
-  blockedSpawnsBeforeCreeper: number;
-
-  /**
-   * Check interval in ticks (1-2 minutes is 1200-2400 ticks)
-   */
-  checkIntervalTicks: number;
-
-  /**
-   * Night time start in ticks
-   */
+  rollTicks: number;
   nightStartTicks: number;
-
-  /**
-   * Night time end in ticks
-   */
-  nightEndTicks: number;
+  testingMode?: boolean;
 }
 
 // Default configuration
 const config: PhantomSpawnerConfig = {
   debugMode: true,
-  minDaysWithoutSleep: 3,
   minYLevel: 64,
-  blockedSpawnsBeforeCreeper: 3,
-  checkIntervalTicks: 1200, // 1 minute (60 seconds × 20 ticks/second)
+  rollTicks: 20, //
   nightStartTicks: 13000,
-  nightEndTicks: 23000,
+  testingMode: true, // Enable testing mode by default for easier debugging
 };
 
-// Stores phantom spawn counter per player
-const phantomSpawnCounter = new Map<string, number>();
-
-// Stores last check time to implement 1-2 minute random intervals
-const lastSpawnAttemptTime = new Map<string, number>();
-
-/**
- * Calculate phantom spawn chance based on days without sleep
- * Day 3: 0% (no spawns)
- * Day 4: 25%
- * Day 5: 37.5%
- * Day 6+: 50%
- * @param daysWithoutSleep Days player has gone without sleep
- * @returns Spawn chance as a percentage (0-100)
- */
-function calculatePhantomSpawnChance(daysWithoutSleep: number): number {
-  if (daysWithoutSleep < config.minDaysWithoutSleep) return 0;
-  if (daysWithoutSleep === config.minDaysWithoutSleep) return 0; // Day 3 has 0% chance
-  if (daysWithoutSleep === config.minDaysWithoutSleep + 1) return 25; // Day 4 has 25% chance
-  if (daysWithoutSleep === config.minDaysWithoutSleep + 2) return 37.5; // Day 5 has 37.5% chance
-  return 50; // Day 6+ has 50% chance
+// Player data storage
+interface PlayerData {
+  daysSinceLastRest: number;
+  spawnsThisDay: number;
+  lastDayChecked: number;
+  lastNightChecked: number;
 }
 
-/**
- * Determine if it's currently night time
- * @returns True if it's night time
- */
-function isNightTime(): boolean {
-  const currentTime = system.currentTick % 24000; // Use system ticks as an approximation
-  return currentTime > config.nightStartTicks && currentTime < config.nightEndTicks;
-}
+// Maps to store player-specific data
+const playerDataMap = new Map<string, PlayerData>();
+
+// intervalIds
+let phaseRollIntervalId: number;
 
 /**
- * Determine if it's time to attempt a phantom spawn for a player
- * @param playerId The player's ID
- * @returns True if it's time to attempt a spawn
+ * Check if player has sky access where they are
  */
-function isTimeToSpawnAttempt(playerId: string): boolean {
-  const currentTime = system.currentTick;
-  const lastAttempt = lastSpawnAttemptTime.get(playerId) || 0;
+function hasSkyAccess(player: Player): boolean {
+  try {
+    const location = player.location;
 
-  // Random interval between 1-2 minutes (1200-2400 ticks)
-  const randomInterval = Math.floor(Math.random() * 1200) + 1200;
+    // Check blocks above player up to build limit
+    for (let y = Math.floor(location.y) + 1; y <= 256; y++) {
+      const blockAbove = player.dimension.getBlock({
+        x: Math.floor(location.x),
+        y: y,
+        z: Math.floor(location.z),
+      });
 
-  if (currentTime - lastAttempt >= randomInterval) {
-    lastSpawnAttemptTime.set(playerId, currentTime);
+      if (blockAbove && !blockAbove.isAir) {
+        return false;
+      }
+    }
+    return true;
+  } catch (error) {
+    // If there's an error, default to having sky access
     return true;
   }
+}
+/**
+ * Get player data, create if doesn't exist
+ */
+function getPlayerData(playerId: string): PlayerData {
+  if (!playerDataMap.has(playerId)) {
+    playerDataMap.set(playerId, {
+      daysSinceLastRest: 0,
+      spawnsThisDay: 0,
+      lastDayChecked: 0,
+      lastNightChecked: 0,
+    });
+  }
+  return playerDataMap.get(playerId)!;
+}
 
-  return false;
+/**
+ * Day check function - runs once per day
+ */
+function performDayCheck(playerSlept: boolean) {
+  const currentDay = world.getDay();
+  const players = world.getPlayers();
+
+  for (const player of players) {
+    const playerData = getPlayerData(player.id);
+
+    if (playerData.lastDayChecked < currentDay) {
+      // Reset spawns for the day
+      playerData.spawnsThisDay = 0;
+
+      // Check if player slept
+      if (playerSlept) {
+        playerData.daysSinceLastRest = 0;
+        player.setDynamicProperty("phantom-phase:daysSinceLastRest", 0);
+        // clear target tag
+        player.removeTag("phase_target");
+        if (config.debugMode) {
+          player.sendMessage("§bYou slept! Days since last rest reset to 0 and cleared tag");
+        }
+      } else {
+        // Player didn't sleep, increment counter with persistence
+        const dynamicPropertySafe = player.getDynamicProperty("phantom-phase:daysSinceLastRest");
+        if (typeof dynamicPropertySafe == "number") {
+          playerData.daysSinceLastRest = Math.max(playerData.daysSinceLastRest, dynamicPropertySafe);
+        }
+        playerData.daysSinceLastRest++;
+        player.setDynamicProperty("phantom-phase:daysSinceLastRest", playerData.daysSinceLastRest);
+
+        if (config.debugMode) {
+          player.sendMessage(
+            `§bYou did not sleep! Days since last rest incremented to ${playerData.daysSinceLastRest}`
+          );
+        }
+      }
+    }
+    playerData.lastDayChecked = currentDay;
+  }
+  if (config.debugMode) {
+    world.sendMessage("§6Day check completed");
+  }
+}
+/**
+ * Night check function - runs once per night for optimization
+ */
+function performNightCheck() {
+  const currentNight = world.getDay();
+  const players = world.getPlayers();
+
+  // Check if any player has daysSinceLastRest >= 4
+  let eligiblePlayers: Player[] = [];
+
+  for (const player of players) {
+    const playerData = getPlayerData(player.id);
+
+    // Only run if we haven't checked this night already
+    if (playerData.daysSinceLastRest >= 4) {
+      eligiblePlayers.push(player);
+    }
+    playerData.lastNightChecked = currentNight;
+  }
+  // If no eligible players, mark night check as complete (optimization)
+  if (eligiblePlayers.length === 0) {
+    if (config.debugMode) {
+      world.sendMessage("§7No players eligible for phase spawning this night");
+    }
+  } else {
+    if (config.debugMode) {
+      world.sendMessage("§6Night check completed - players eligible for phase spawning");
+    }
+    performPhaseSpawnRoll(eligiblePlayers);
+  }
+}
+/**
+ * Phase spawn roll function - called every 2000 ticks during night
+ */
+function performPhaseSpawnRoll(players: Player[]) {
+  // Clear any existing phase roll interval first
+  if (phaseRollIntervalId !== undefined) {
+    system.clearRun(phaseRollIntervalId);
+  }
+
+  // Start the phase roll interval
+  phaseRollIntervalId = system.runInterval(() => {
+    const time = world.getTimeOfDay();
+
+    // Check if it's still nighttime
+    if (time >= config.nightStartTicks && time < 24000) {
+      if (config.debugMode) {
+        world.sendMessage(`§7Calling phase roll since still night (time: ${time})`);
+      }
+
+      for (let i = players.length - 1; i >= 0; i--) {
+        const player = players[i];
+
+        const playerData = getPlayerData(player.id);
+
+        // Calculate max spawns per night: daysSinceLastRest - 3
+        const maxSpawnsPerNight = Math.max(0, playerData.daysSinceLastRest - 3);
+
+        // Check if we've reached max spawns for tonight
+        if (playerData.spawnsThisDay >= maxSpawnsPerNight) {
+          if (config.debugMode) {
+            player.sendMessage(`§7Maximum phase spawns reached for tonight (${maxSpawnsPerNight})`);
+          }
+          players.splice(i, 1);
+          continue;
+        }
+
+        // Check phase spawn conditions (blocked phantom spawn conditions)
+        const belowMinY = player.location.y < config.minYLevel;
+        const noSkyAccess = !hasSkyAccess(player);
+
+        if (belowMinY || noSkyAccess) {
+          if (config.debugMode) {
+            player.sendMessage("§7Phase spawn roll happened");
+          }
+
+          // Calculate spawn chance: 0.25 * (daysSinceLastRest - 3)
+          const spawnChance = 0.25 * (playerData.daysSinceLastRest - 3);
+          const roll = Math.random();
+          const spawnSuccessful = roll <= spawnChance;
+
+          // Spawn phase entity if successful
+          if (spawnSuccessful) {
+            try {
+              spawnPhase(player);
+              player.sendMessage("§c⚡ Phase entity spawned 50 blocks above due to blocked phantom conditions!");
+              playerData.spawnsThisDay++;
+              player.addTag("phase_target");
+            } catch (error) {
+              if (config.debugMode) {
+                player.sendMessage(`§cError spawning phase entity: ${error}`);
+              }
+            }
+          } else {
+            if (config.debugMode) {
+              player.sendMessage(
+                `§c⚡ Phase roll failed, roll = ${(roll * 100).toFixed(1)}%, chance = ${(spawnChance * 100).toFixed(
+                  1
+                )}%`
+              );
+            }
+          }
+        }
+      }
+
+      // If no players left, stop the interval
+      if (players.length === 0) {
+        system.clearRun(phaseRollIntervalId);
+        if (config.debugMode) {
+          world.sendMessage("§7No more eligible players, stopping phase roll");
+        }
+      }
+    } else {
+      // It's daytime, stop the interval
+      system.clearRun(phaseRollIntervalId);
+      if (config.debugMode) {
+        world.sendMessage(`§7Daytime detected (${time}), stopping phase roll`);
+      }
+    }
+  }, config.rollTicks);
+}
+function spawnPhase(player: Player) {
+  const phasePos = {
+    x: player.location.x,
+    y: player.location.y + 50,
+    z: player.location.z,
+  };
+  player.dimension.spawnEntity("creeper", phasePos);
 }
 
 /**
  * Initialize the phantom spawner system
- * @param customConfig Optional custom configuration
  */
 export function startPhantomSpawner(customConfig?: Partial<PhantomSpawnerConfig>) {
-  // Apply custom configuration if provided
   if (customConfig) {
     Object.assign(config, customConfig);
   }
-
-  // Run the spawn check at regular intervals
-  const intervalId = system.runInterval(() => {
-    const players = world.getPlayers();
-
-    for (const player of players) {
-      // In Bedrock API, we'll use a proxy for insomnia through bad_omen effect
-      // since insomnia component may not be directly accessible
-      const playerId = player.id;
-
-      // Simulate insomnia component using bad_omen effect
-      // We'll check if player has the bad_omen effect as a proxy for insomnia
-      const hasInsomnia = player.hasTag("insomnia");
-      const daysWithoutSleep = hasInsomnia ? 4 : 0; // Simulate 4 days without sleep if tag is present
-
-      if (!hasInsomnia) {
-        if (config.debugMode && phantomSpawnCounter.has(playerId)) {
-          player.sendMessage("§7No insomnia effect detected.");
-        }
-        phantomSpawnCounter.delete(playerId);
-        lastSpawnAttemptTime.delete(playerId);
-        continue;
-      } // Debug information about insomnia status
-      if (config.debugMode) {
-        // Use titleraw or title command instead since onScreenDisplay might not be available
-        player.sendMessage(`§3Insomnia: ${daysWithoutSleep} days without sleep`);
-      } // Reset counter if player sleeps
-      if (daysWithoutSleep < config.minDaysWithoutSleep) {
-        const counter = phantomSpawnCounter.get(playerId) || 0;
-        if (counter > 0) {
-          player.sendMessage("§b💤 Insomnia reset! Phantom counter cleared.");
-          phantomSpawnCounter.set(playerId, 0);
-        }
-        continue;
-      }
-
-      // Only attempt spawns during night or if it's time for another attempt
-      if (isNightTime() && isTimeToSpawnAttempt(playerId)) {
-        // Calculate spawn chance based on days without sleep
-        const spawnChance = calculatePhantomSpawnChance(daysWithoutSleep);
-        const roll = Math.random() * 100;
-        const successfulRoll = roll <= spawnChance; // Check all conditions for phantom spawning
-        const playerLocation = player.location;
-        if (!playerLocation) continue;
-
-        const aboveSeaLevel = playerLocation.y >= config.minYLevel;
-        // Get player's block and check sky access
-        // In Bedrock API, we need to implement our own sky access check
-        // For testing purposes, we'll check if there's a block directly above the player
-
-        // Create a simple sky access check by checking blocks above
-        let hasSkyAccess = true;
-        try {
-          // Check 20 blocks above player
-          for (let y = 1; y <= 20; y++) {
-            const blockAbove = player.dimension.getBlock({
-              x: Math.floor(playerLocation.x),
-              y: Math.floor(playerLocation.y) + y,
-              z: Math.floor(playerLocation.z),
-            });
-
-            if (
-              blockAbove &&
-              blockAbove.typeId !== "minecraft:air" &&
-              blockAbove.typeId !== "minecraft:void_air" &&
-              blockAbove.typeId !== "minecraft:cave_air"
-            ) {
-              hasSkyAccess = false;
-              break;
-            }
-          }
-        } catch (error) {
-          // If there's an error, default to having sky access
-          hasSkyAccess = true;
-        }
-
-        // Debug info about phantom spawn attempt
-        if (config.debugMode) {
-          player.sendMessage(
-            `§7Phantom Spawn Attempt: ${successfulRoll ? "§aSuccess" : "§cFail"} (${roll.toFixed(
-              1
-            )}/${spawnChance.toFixed(1)}%)`
-          );
-          player.sendMessage(
-            `§7Conditions: Above Sea Level: ${aboveSeaLevel ? "§a✓" : "§c✗"}, Sky Access: ${
-              hasSkyAccess ? "§a✓" : "§c✗"
-            }`
-          );
-        }
-
-        // Check if phantom should spawn but is blocked
-        if (successfulRoll && aboveSeaLevel && !hasSkyAccess) {
-          const currentCount = phantomSpawnCounter.get(playerId) || 0;
-          const newCount = currentCount + 1;
-          phantomSpawnCounter.set(playerId, newCount);
-
-          player.sendMessage(`§e⚠ Phantom spawn blocked! Counter: ${newCount}/${config.blockedSpawnsBeforeCreeper}`);
-
-          // Spawn creeper if counter reaches threshold
-          if (newCount >= config.blockedSpawnsBeforeCreeper) {
-            const creeperPos = { x: player.location.x, y: 256, z: player.location.z };
-            player.dimension.spawnEntity("minecraft:creeper", creeperPos);
-            player.sendMessage("§c💥 Creeper spawned above due to failed phantom spawns!");
-            phantomSpawnCounter.set(playerId, 0); // Reset counter
-          }
-        }
-        // Reset counter if a phantom would have successfully spawned (all conditions met)
-        else if (successfulRoll && aboveSeaLevel && hasSkyAccess) {
-          if (config.debugMode) {
-            player.sendMessage("§7A phantom would have spawned here (all conditions met)");
-          }
-          // In a real game, a phantom would spawn here. Reset the counter.
-          phantomSpawnCounter.set(playerId, 0);
-        }
-      }
-    }
-  }, 200); // Run every 10 seconds for more reliable debug feedback
-
-  if (config.debugMode) {
-    world.sendMessage("§6Phantom Spawner system started");
+  const players = world.getPlayers();
+  for (const player of players) {
+    const playerData = getPlayerData(player.id);
   }
+  world.sendMessage("phase-spawner: Players init");
 
-  return intervalId;
+  let tickCheckId: number | undefined;
+  function tickCheck(playerSlept: boolean) {
+    if (tickCheckId !== undefined) system.clearRun(tickCheckId);
+
+    const time = world.getTimeOfDay();
+    let nextInterval = 20;
+
+    if (time >= 0 && time < config.nightStartTicks) {
+      nextInterval = 13000 - time; // wait until next sunset
+      performDayCheck(playerSlept);
+      world.sendMessage(`§7Doing day check at ${time} next call within ${nextInterval} ticks`);
+    } else {
+      nextInterval = (24000 - time + 0) % 24000; // wait until next sunrise
+      performNightCheck();
+      world.sendMessage(`§7Doing night check at ${time} next call within ${nextInterval} ticks`);
+    }
+    tickCheckId = system.runInterval(() => tickCheck(false), nextInterval);
+  }
+  tickCheck(false);
+  world.sendMessage("phase-spawner: tickCheck called");
+
+  world.afterEvents.playerInteractWithBlock.subscribe((event) => {
+    const block = event.block;
+    const player = event.player;
+    let timeBefore: number, timeAfter: number;
+    let playerSlept: boolean;
+    if (block.typeId.includes("bed")) {
+      player.sendMessage("🛏️ Interacted with a bed block!");
+      timeBefore = world.getTimeOfDay();
+      system.runTimeout(() => {
+        timeAfter = world.getTimeOfDay();
+        if (timeAfter != timeBefore + 140) {
+          playerSlept = true;
+          world.sendMessage("phase-spawner: player Slept");
+          tickCheck(playerSlept);
+          world.sendMessage("phase-spawner: tickCheck called");
+        } else {
+          playerSlept = false;
+          world.sendMessage("phase-spawner: player did not Sleep");
+          tickCheck(playerSlept);
+          world.sendMessage("phase-spawner: tickCheck called");
+        }
+      }, 140);
+    }
+  });
+  return true;
 }

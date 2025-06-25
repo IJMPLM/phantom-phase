@@ -17,10 +17,16 @@ export interface PathPushingConfig {
   forceMultiplier: number;
 
   /**
-   * Tag to identify target entities
-   * @default "raid_target"
+   * Entity identifier to target for pushing (e.g., "phantom-phase:phase")
+   * @default "phantom-phase:phase"
    */
-  targetEntityTag: string;
+  targetEntityId: string;
+
+  /**
+   * Player tag to identify which players should be targeted
+   * @default "phase_target"
+   */
+  playerTag: string;
 
   /**
    * Whether to show debug messages
@@ -33,7 +39,8 @@ export interface PathPushingConfig {
 const defaultConfig: PathPushingConfig = {
   updateIntervalTicks: 5,
   forceMultiplier: 0.5,
-  targetEntityTag: "raid_target",
+  targetEntityId: "phantom-phase:phase",
+  playerTag: "phase_target",
   debugMessages: false,
 };
 
@@ -44,16 +51,38 @@ let currentConfig: PathPushingConfig = { ...defaultConfig };
  * Updates the path pushing entities toward players
  */
 function updatePathPushing() {
-  const players = world.getPlayers();
+  const allPlayers = world.getPlayers();
   const overworld = world.getDimension("overworld");
 
-  for (const player of players) {
+  // Filter players to only those with the specific tag
+  const targetPlayers = allPlayers.filter((player) => player.hasTag(currentConfig.playerTag));
+
+  if (targetPlayers.length === 0) {
+    if (currentConfig.debugMessages) {
+      console.warn(`No players found with tag "${currentConfig.playerTag}"`);
+    }
+    return;
+  }
+
+  // Query entities by identifier instead of tag
+  const entityQuery: EntityQueryOptions = { type: currentConfig.targetEntityId };
+  const targetEntities = overworld.getEntities(entityQuery);
+
+  if (targetEntities.length === 0) {
+    if (currentConfig.debugMessages) {
+      console.warn(`No entities found with identifier "${currentConfig.targetEntityId}"`);
+    }
+    return;
+  }
+
+  // For each target player, push all target entities toward them
+  for (const player of targetPlayers) {
     const playerPos = player.location;
 
-    const taggedEntities: EntityQueryOptions = { tags: [currentConfig.targetEntityTag] };
+    for (const entity of targetEntities) {
+      const entityPos = entity.location;
 
-    for (const entity of overworld.getEntities(taggedEntities)) {
-      const entityPos = entity.location; // Calculate direction vector toward the player
+      // Calculate direction vector toward the player
       const direction = {
         x: playerPos.x - entityPos.x,
         y: playerPos.y - entityPos.y,
@@ -74,7 +103,9 @@ function updatePathPushing() {
   }
 
   if (currentConfig.debugMessages) {
-    console.warn(`Path pushing updated for ${players.length} players`);
+    console.warn(
+      `Path pushing updated: ${targetPlayers.length} target players, ${targetEntities.length} target entities`
+    );
   }
 }
 

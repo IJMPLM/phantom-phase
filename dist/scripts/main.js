@@ -1,5 +1,5 @@
 // scripts/main.ts
-import { world as world8, system as system8 } from "@minecraft/server";
+import { world as world9, system as system9 } from "@minecraft/server";
 
 // scripts/phase-mode.ts
 import { world as world3, system as system3, GameMode as GameMode2 } from "@minecraft/server";
@@ -3960,18 +3960,33 @@ import { system as system6, world as world6 } from "@minecraft/server";
 var defaultConfig = {
   updateIntervalTicks: 5,
   forceMultiplier: 0.5,
-  targetEntityTag: "raid_target",
+  targetEntityId: "phantom-phase:phase",
+  playerTag: "phase_target",
   debugMessages: false
 };
 var intervalId;
 var currentConfig = { ...defaultConfig };
 function updatePathPushing() {
-  const players = world6.getPlayers();
+  const allPlayers = world6.getPlayers();
   const overworld = world6.getDimension("overworld");
-  for (const player of players) {
+  const targetPlayers = allPlayers.filter((player) => player.hasTag(currentConfig.playerTag));
+  if (targetPlayers.length === 0) {
+    if (currentConfig.debugMessages) {
+      console.warn(`No players found with tag "${currentConfig.playerTag}"`);
+    }
+    return;
+  }
+  const entityQuery = { type: currentConfig.targetEntityId };
+  const targetEntities = overworld.getEntities(entityQuery);
+  if (targetEntities.length === 0) {
+    if (currentConfig.debugMessages) {
+      console.warn(`No entities found with identifier "${currentConfig.targetEntityId}"`);
+    }
+    return;
+  }
+  for (const player of targetPlayers) {
     const playerPos = player.location;
-    const taggedEntities = { tags: [currentConfig.targetEntityTag] };
-    for (const entity of overworld.getEntities(taggedEntities)) {
+    for (const entity of targetEntities) {
       const entityPos = entity.location;
       const direction = {
         x: playerPos.x - entityPos.x,
@@ -3988,7 +4003,9 @@ function updatePathPushing() {
     }
   }
   if (currentConfig.debugMessages) {
-    console.warn(`Path pushing updated for ${players.length} players`);
+    console.warn(
+      `Path pushing updated: ${targetPlayers.length} target players, ${targetEntities.length} target entities`
+    );
   }
 }
 function startPathPushing(config6 = {}) {
@@ -4016,123 +4033,222 @@ function stopPathPushing() {
 import { system as system7, world as world7 } from "@minecraft/server";
 var config5 = {
   debugMode: true,
-  minDaysWithoutSleep: 3,
   minYLevel: 64,
-  blockedSpawnsBeforeCreeper: 3,
-  checkIntervalTicks: 1200,
-  // 1 minute (60 seconds × 20 ticks/second)
+  rollTicks: 20,
+  //
   nightStartTicks: 13e3,
-  nightEndTicks: 23e3
+  testingMode: true
+  // Enable testing mode by default for easier debugging
 };
-var phantomSpawnCounter = /* @__PURE__ */ new Map();
-var lastSpawnAttemptTime = /* @__PURE__ */ new Map();
-function calculatePhantomSpawnChance(daysWithoutSleep) {
-  if (daysWithoutSleep < config5.minDaysWithoutSleep) return 0;
-  if (daysWithoutSleep === config5.minDaysWithoutSleep) return 0;
-  if (daysWithoutSleep === config5.minDaysWithoutSleep + 1) return 25;
-  if (daysWithoutSleep === config5.minDaysWithoutSleep + 2) return 37.5;
-  return 50;
-}
-function isNightTime() {
-  const currentTime = system7.currentTick % 24e3;
-  return currentTime > config5.nightStartTicks && currentTime < config5.nightEndTicks;
-}
-function isTimeToSpawnAttempt(playerId) {
-  const currentTime = system7.currentTick;
-  const lastAttempt = lastSpawnAttemptTime.get(playerId) || 0;
-  const randomInterval = Math.floor(Math.random() * 1200) + 1200;
-  if (currentTime - lastAttempt >= randomInterval) {
-    lastSpawnAttemptTime.set(playerId, currentTime);
-    return true;
+var playerDataMap = /* @__PURE__ */ new Map();
+function getPlayerData(playerId) {
+  if (!playerDataMap.has(playerId)) {
+    playerDataMap.set(playerId, {
+      daysSinceLastRest: 0,
+      spawnsThisDay: 0,
+      lastDayChecked: 0,
+      lastNightChecked: 0
+    });
   }
-  return false;
+  return playerDataMap.get(playerId);
+}
+function performDayCheck(playerSlept) {
+  const currentDay = world7.getDay();
+  const players = world7.getPlayers();
+  for (const player of players) {
+    const playerData = getPlayerData(player.id);
+    if (playerData.lastDayChecked < currentDay) {
+      playerData.spawnsThisDay = 0;
+      if (playerSlept) {
+        playerData.daysSinceLastRest = 0;
+        player.setDynamicProperty("phantom-phase:daysSinceLastRest", 0);
+        player.removeTag("phase_target");
+        if (config5.debugMode) {
+          player.sendMessage("\xA7bYou slept! Days since last rest reset to 0 and cleared tag");
+        }
+      } else {
+        const dynamicPropertySafe = player.getDynamicProperty("phantom-phase:daysSinceLastRest");
+        if (typeof dynamicPropertySafe == "number") {
+          playerData.daysSinceLastRest = Math.max(playerData.daysSinceLastRest, dynamicPropertySafe);
+        }
+        playerData.daysSinceLastRest++;
+        player.setDynamicProperty("phantom-phase:daysSinceLastRest", playerData.daysSinceLastRest);
+        if (config5.debugMode) {
+          player.sendMessage(
+            `\xA7bYou did not sleep! Days since last rest incremented to ${playerData.daysSinceLastRest}`
+          );
+        }
+      }
+    }
+    playerData.lastDayChecked = currentDay;
+  }
+  if (config5.debugMode) {
+    world7.sendMessage("\xA76Day check completed");
+  }
+}
+function performNightCheck() {
+  const currentNight = world7.getDay();
+  const players = world7.getPlayers();
+  let eligiblePlayers = [];
+  for (const player of players) {
+    const playerData = getPlayerData(player.id);
+    if (playerData.daysSinceLastRest >= 4) {
+      spawnPhase(player);
+    }
+    playerData.lastNightChecked = currentNight;
+  }
+  if (eligiblePlayers.length === 0) {
+    if (config5.debugMode) {
+      world7.sendMessage("\xA77No players eligible for phase spawning this night");
+    }
+  } else {
+    if (config5.debugMode) {
+      world7.sendMessage("\xA76Night check completed - players eligible for phase spawning");
+    }
+  }
+}
+function spawnPhase(player) {
+  const phasePos = {
+    x: player.location.x,
+    y: player.location.y + 50,
+    z: player.location.z
+  };
+  player.dimension.spawnEntity("phantom-phase:phase", phasePos);
 }
 function startPhantomSpawner(customConfig) {
   if (customConfig) {
     Object.assign(config5, customConfig);
   }
-  const intervalId2 = system7.runInterval(() => {
-    const players = world7.getPlayers();
-    for (const player of players) {
-      const playerId = player.id;
-      const hasInsomnia = player.hasTag("insomnia");
-      const daysWithoutSleep = hasInsomnia ? 4 : 0;
-      if (!hasInsomnia) {
-        if (config5.debugMode && phantomSpawnCounter.has(playerId)) {
-          player.sendMessage("\xA77No insomnia effect detected.");
-        }
-        phantomSpawnCounter.delete(playerId);
-        lastSpawnAttemptTime.delete(playerId);
-        continue;
-      }
-      if (config5.debugMode) {
-        player.sendMessage(`\xA73Insomnia: ${daysWithoutSleep} days without sleep`);
-      }
-      if (daysWithoutSleep < config5.minDaysWithoutSleep) {
-        const counter = phantomSpawnCounter.get(playerId) || 0;
-        if (counter > 0) {
-          player.sendMessage("\xA7b\u{1F4A4} Insomnia reset! Phantom counter cleared.");
-          phantomSpawnCounter.set(playerId, 0);
-        }
-        continue;
-      }
-      if (isNightTime() && isTimeToSpawnAttempt(playerId)) {
-        const spawnChance = calculatePhantomSpawnChance(daysWithoutSleep);
-        const roll = Math.random() * 100;
-        const successfulRoll = roll <= spawnChance;
-        const playerLocation = player.location;
-        if (!playerLocation) continue;
-        const aboveSeaLevel = playerLocation.y >= config5.minYLevel;
-        let hasSkyAccess = true;
-        try {
-          for (let y = 1; y <= 20; y++) {
-            const blockAbove = player.dimension.getBlock({
-              x: Math.floor(playerLocation.x),
-              y: Math.floor(playerLocation.y) + y,
-              z: Math.floor(playerLocation.z)
-            });
-            if (blockAbove && blockAbove.typeId !== "minecraft:air" && blockAbove.typeId !== "minecraft:void_air" && blockAbove.typeId !== "minecraft:cave_air") {
-              hasSkyAccess = false;
-              break;
-            }
-          }
-        } catch (error) {
-          hasSkyAccess = true;
-        }
-        if (config5.debugMode) {
-          player.sendMessage(
-            `\xA77Phantom Spawn Attempt: ${successfulRoll ? "\xA7aSuccess" : "\xA7cFail"} (${roll.toFixed(
-              1
-            )}/${spawnChance.toFixed(1)}%)`
-          );
-          player.sendMessage(
-            `\xA77Conditions: Above Sea Level: ${aboveSeaLevel ? "\xA7a\u2713" : "\xA7c\u2717"}, Sky Access: ${hasSkyAccess ? "\xA7a\u2713" : "\xA7c\u2717"}`
-          );
-        }
-        if (successfulRoll && aboveSeaLevel && !hasSkyAccess) {
-          const currentCount = phantomSpawnCounter.get(playerId) || 0;
-          const newCount = currentCount + 1;
-          phantomSpawnCounter.set(playerId, newCount);
-          player.sendMessage(`\xA7e\u26A0 Phantom spawn blocked! Counter: ${newCount}/${config5.blockedSpawnsBeforeCreeper}`);
-          if (newCount >= config5.blockedSpawnsBeforeCreeper) {
-            const creeperPos = { x: player.location.x, y: 256, z: player.location.z };
-            player.dimension.spawnEntity("minecraft:creeper", creeperPos);
-            player.sendMessage("\xA7c\u{1F4A5} Creeper spawned above due to failed phantom spawns!");
-            phantomSpawnCounter.set(playerId, 0);
-          }
-        } else if (successfulRoll && aboveSeaLevel && hasSkyAccess) {
-          if (config5.debugMode) {
-            player.sendMessage("\xA77A phantom would have spawned here (all conditions met)");
-          }
-          phantomSpawnCounter.set(playerId, 0);
-        }
-      }
-    }
-  }, 200);
-  if (config5.debugMode) {
-    world7.sendMessage("\xA76Phantom Spawner system started");
+  const players = world7.getPlayers();
+  for (const player of players) {
+    const playerData = getPlayerData(player.id);
   }
-  return intervalId2;
+  world7.sendMessage("phase-spawner: Players init");
+  let tickCheckId;
+  function tickCheck(playerSlept) {
+    if (tickCheckId !== void 0) system7.clearRun(tickCheckId);
+    const time = world7.getTimeOfDay();
+    let nextInterval = 20;
+    if (time >= 0 && time < config5.nightStartTicks) {
+      nextInterval = 13e3 - time;
+      performDayCheck(playerSlept);
+      world7.sendMessage(`\xA77Doing day check at ${time} next call within ${nextInterval} ticks`);
+    } else {
+      nextInterval = (24e3 - time + 0) % 24e3;
+      performNightCheck();
+      world7.sendMessage(`\xA77Doing night check at ${time} next call within ${nextInterval} ticks`);
+    }
+    tickCheckId = system7.runInterval(() => tickCheck(false), nextInterval);
+  }
+  tickCheck(false);
+  world7.sendMessage("phase-spawner: tickCheck called");
+  world7.afterEvents.playerInteractWithBlock.subscribe((event) => {
+    const block = event.block;
+    const player = event.player;
+    let timeBefore, timeAfter;
+    let playerSlept;
+    if (block.typeId.includes("bed")) {
+      player.sendMessage("\u{1F6CF}\uFE0F Interacted with a bed block!");
+      timeBefore = world7.getTimeOfDay();
+      system7.runTimeout(() => {
+        timeAfter = world7.getTimeOfDay();
+        if (timeAfter != timeBefore + 140) {
+          playerSlept = true;
+          world7.sendMessage("phase-spawner: player Slept");
+          tickCheck(playerSlept);
+          world7.sendMessage("phase-spawner: tickCheck called");
+        } else {
+          playerSlept = false;
+          world7.sendMessage("phase-spawner: player did not Sleep");
+          tickCheck(playerSlept);
+          world7.sendMessage("phase-spawner: tickCheck called");
+        }
+      }, 140);
+    }
+  });
+  return true;
+}
+
+// scripts/debug.ts
+import { ActionFormData } from "@minecraft/server-ui";
+import { world as world8, system as system8 } from "@minecraft/server";
+function showCustomMenu(player) {
+  const form = new ActionFormData().title("\u2699 Manual Script Runner").body("Choose a script to run").button("Spawn Phase").button("Check Phantom Spawn Condition").button("World Message test");
+  form.show(player).then((response) => {
+    if (response.canceled) return;
+    switch (response.selection) {
+      case 0:
+        system8.runInterval(() => {
+          const spawnChance2 = 0.25 * (5 - 3);
+          const roll2 = Math.random();
+          const spawnSuccessful2 = roll2 <= spawnChance2;
+          if (spawnSuccessful2) {
+            const phasePos = {
+              x: player.location.x,
+              y: player.location.y + 10,
+              // 10 blocks above player
+              z: player.location.z
+            };
+            player.dimension.spawnEntity("phantom-phase:phase", phasePos);
+            player.sendMessage("\xA7c\u26A1 Phase entity spawned 100 blocks above due to blocked phantom conditions!");
+          } else {
+            player.sendMessage(`\xA7c\u26A1 Phase roll failed, roll = ${roll2}, chance = ${spawnChance2} `);
+          }
+        }, 40);
+        const spawnChance = 0.25 * (5 - 3);
+        const roll = Math.random();
+        const spawnSuccessful = roll <= spawnChance;
+        if (spawnSuccessful) {
+          const phasePos = {
+            x: player.location.x,
+            y: player.location.y + 10,
+            // 10 blocks above player
+            z: player.location.z
+          };
+          player.dimension.spawnEntity("phantom-phase:phase", phasePos);
+          player.sendMessage("\xA7c\u26A1 Phase entity spawned 100 blocks above due to blocked phantom conditions!");
+        } else {
+          player.sendMessage(`\xA7c\u26A1 Phase roll failed, roll = ${roll}, chance = ${spawnChance} `);
+        }
+        break;
+      case 1:
+        let hasSkyAccess2 = function(player2) {
+          try {
+            const location = player2.location;
+            for (let y = Math.floor(location.y) + 1; y <= 256; y++) {
+              const blockAbove = player2.dimension.getBlock({
+                x: Math.floor(location.x),
+                y,
+                z: Math.floor(location.z)
+              });
+              if (blockAbove && !blockAbove.isAir) {
+                return false;
+              }
+            }
+            return true;
+          } catch (error) {
+            return true;
+          }
+        };
+        var hasSkyAccess = hasSkyAccess2;
+        const aboveMinY = player.location.y >= 64;
+        const skyAccessible = hasSkyAccess2(player);
+        if (aboveMinY) {
+          player.sendMessage("\xA77Phantom spawns above MinY");
+        } else {
+          player.sendMessage("\xA7c Phantom does not spawn, below MinY");
+        }
+        if (skyAccessible) {
+          player.sendMessage("\xA77Phantom spawns has sky access");
+        } else {
+          player.sendMessage("\xA7c Phantom does not spawn, no sky access");
+        }
+        break;
+      case 2:
+        const day = world8.getDay();
+        world8.sendMessage(`day: ${day}`);
+    }
+  });
 }
 
 // scripts/main.ts
@@ -4140,7 +4256,7 @@ var ticksSinceLoad = 0;
 function mainTick() {
   ticksSinceLoad++;
   if (ticksSinceLoad === 60) {
-    world8.sendMessage("\xA76Phantom Phase system initialized...");
+    world9.sendMessage("\xA76Phantom Phase system initialized...");
     updatePhaseConfig({
       speedThresholdBps: 25,
       exitSpeedThresholdBps: 7,
@@ -4172,20 +4288,24 @@ function mainTick() {
     startPathPushing({
       updateIntervalTicks: 5,
       forceMultiplier: 0.5,
-      targetEntityTag: "raid_target",
+      targetEntityId: "phantom-phase:phase",
+      playerTag: "phase_target",
       debugMessages: true
     });
     startPhantomSpawner({
       debugMode: true,
-      minDaysWithoutSleep: 3,
       minYLevel: 64,
-      blockedSpawnsBeforeCreeper: 3,
-      checkIntervalTicks: 1200
-      // 1 minute
+      rollTicks: 20,
+      testingMode: true
     });
   }
-  system8.run(mainTick);
+  system9.run(mainTick);
 }
-system8.run(mainTick);
+world9.afterEvents.itemUse.subscribe((event) => {
+  const player = event.source;
+  if (!player.hasTag("script_runner")) return;
+  showCustomMenu(player);
+});
+system9.run(mainTick);
 
 //# sourceMappingURL=../debug/main.js.map

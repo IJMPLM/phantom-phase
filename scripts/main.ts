@@ -3,6 +3,7 @@ import { updatePhaseConfig, updatePhaseEndConfig } from "./phase-mode";
 import { startHeadDetection } from "./phase-head-detector";
 import { startPathPushing } from "./path-pushing";
 import { startPhantomSpawner } from "./phase-spawner";
+import { showCustomMenu } from "./debug";
 
 let ticksSinceLoad = 0;
 
@@ -33,24 +34,30 @@ function mainTick() {
       fireResistanceDuration: 10, // 10 seconds of fire resistance
       debugMessages: true,
     });
-    startHeadDetection(); // Start path pushing system with configuration
+    startHeadDetection();
+
+    // Start path pushing system with configuration
     startPathPushing({
       updateIntervalTicks: 5,
       forceMultiplier: 0.5,
-      targetEntityTag: "raid_target",
+      targetEntityId: "phantom-phase:phase",
+      playerTag: "phase_target",
       debugMessages: true,
     });
 
-    // Start phantom spawner system
+    // Start optimized phantom spawner system
     startPhantomSpawner({
       debugMode: true,
-      minDaysWithoutSleep: 3,
       minYLevel: 64,
-      blockedSpawnsBeforeCreeper: 3,
-      checkIntervalTicks: 1200, // 1 minute
+      rollTicks: 20,
+      testingMode: true,
     });
   }
   system.run(mainTick);
 }
-
+world.afterEvents.itemUse.subscribe((event) => {
+  const player = event.source;
+  if (!player.hasTag("script_runner")) return; // Optional filter
+  showCustomMenu(player);
+});
 system.run(mainTick);
